@@ -77,7 +77,7 @@ async function registerRestaurant({ name, password }, pool) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const check = await pool.query('SELECT name FROM users WHERE name=$1', [name]);
+        const check = await pool.query('SELECT name FROM restaurants WHERE name=$1', [name]);
         if (check.rows.length > 0) {
             return { status: 400, error: 'Username already exists' };
         }

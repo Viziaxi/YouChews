@@ -57,7 +57,7 @@ describe('User Auth Functions', () => {
         expect(result.error).toBe('Missing required field');
     });
 
-    test('1.3 registerUser - username exists', async () => {
+    test('1.3 registerUser - username already exists', async () => {
         mockPool.query.mockResolvedValueOnce(rows([{ name: 'alice' }]));
         const result = await registerUser({ name: 'alice', password: 'pass' }, mockPool);
         expect(result.status).toBe(400);
@@ -85,18 +85,18 @@ describe('Restaurant Auth Functions', () => {
     test('2.1 registerRestaurant - success', async () => {
         mockPool.query
             .mockResolvedValueOnce(rows([]))
-            .mockResolvedValueOnce(rows({ id: 10, name: 'PizzaHub' }));
+            .mockResolvedValueOnce(rows({ id: 10, name: 'KFC' }));
 
         bcrypt.hash.mockResolvedValue('balabalawhatever');
 
-        const result = await registerRestaurant({ name: 'PizzaHub', password: 'secret' }, mockPool);
+        const result = await registerRestaurant({ name: 'KFC', password: 'secret' }, mockPool);
         expect(result.status).toBe(201);
         expect(result.user.id).toBe(10);
     });
 
-    test('2.2 registerRestaurant - username taken in users table', async () => {
-        mockPool.query.mockResolvedValueOnce(rows([{ name: 'PizzaHub' }]));
-        const result = await registerRestaurant({ name: 'PizzaHub', password: 'secret' }, mockPool);
+    test('2.2 registerRestaurant - username taken', async () => {
+        mockPool.query.mockResolvedValueOnce(rows([{ name: 'KFC' }]));
+        const result = await registerRestaurant({ name: 'KFC', password: 'secret' }, mockPool);
         expect(result.status).toBe(400);
         expect(result.error).toBe('Username already exists');
     });
@@ -110,10 +110,10 @@ describe('Restaurant Auth Functions', () => {
     });
 
     test('2.4 loginRestaurant - success', async () => {
-        mockPool.query.mockResolvedValueOnce(rows({ id: 5, name: 'BurgerKing', password: 'hash' }));
+        mockPool.query.mockResolvedValueOnce(rows({ id: 5, name: 'IN&OUTS', password: 'hash' }));
         bcrypt.compare.mockResolvedValue(true);
 
-        const result = await loginRestaurant({ name: 'BurgerKing', password: 'pass' }, mockPool);
+        const result = await loginRestaurant({ name: 'IN&OUTS', password: 'pass' }, mockPool);
         expect(result.status).toBe(201);
         expect(jwt.sign).toHaveBeenCalledWith(
             expect.objectContaining({ role: 'restaurant' }),
@@ -122,11 +122,10 @@ describe('Restaurant Auth Functions', () => {
         );
     });
 
-    test('2.5 loginRestaurant - invalid password', async () => {
+    test('2.5 loginRestaurant - wrong password', async () => {
         mockPool.query.mockResolvedValueOnce(rows({ password: 'hash' }));
         bcrypt.compare.mockResolvedValue(false);
-
-        const result = await loginRestaurant({ name: 'BurgerKing', password: 'wrong' }, mockPool);
+        const result = await loginRestaurant({ name: 'IN&OUTS', password: 'wrong' }, mockPool);
         expect(result.status).toBe(401);
     });
 });
@@ -134,19 +133,17 @@ describe('Restaurant Auth Functions', () => {
 
 describe('Admin Operations', () => {
     const mockCheckAll = jest.fn();
-
     beforeEach(() => {
         mockCheckAll.mockResolvedValue({ status: 200 });
     });
 
-    test('3.1 adminLogin - success (plain text compare)', async () => {
+    test('3.1 adminLogin - success', async () => {
         mockPool.query.mockResolvedValueOnce(rows({ name: 'admin1', password: 'adminpass' }));
 
         const result = await adminLogin({ name: 'admin1', password: 'adminpass' }, mockPool);
         expect(result.status).toBe(201);
         expect(result.token).toBeDefined();
     });
-
     test('3.2 adminLogin - wrong password', async () => {
         mockPool.query.mockResolvedValueOnce(rows({ password: 'adminpass' }));
         const result = await adminLogin({ name: 'admin1', password: 'wrong' }, mockPool);
@@ -194,7 +191,7 @@ describe('Admin Operations', () => {
 
         const result = await manageQueue(
             { approved_list: [], denied_list: [] },
-            'bad-token',
+            'bad token',
             mockPool,
             mockCheckAll
         );
@@ -203,7 +200,7 @@ describe('Admin Operations', () => {
     });
 });
 
-describe('Restaurant Data Management', () => {
+describe('Restaurant operations', () => {
     const mockCheckAll = jest.fn().mockResolvedValue({ status: 200 });
 
     test('4.1 uploadRestaurant - success', async () => {
@@ -232,7 +229,6 @@ describe('Restaurant Data Management', () => {
 
         const data = { id: 7, phone: '123-456' };
         const result = await updateRestaurant(data, 'token', mockPool, mockCheckAll);
-
         expect(result.status).toBe(200);
         expect(mockPool.query).toHaveBeenCalledWith(
             expect.stringContaining('UPDATE queue SET restaurant_info = restaurant_info ||'),
