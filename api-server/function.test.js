@@ -35,10 +35,7 @@ const rows = (data) => ({ rows: Array.isArray(data) ? data : [data] });
 describe('User Auth Functions', () => {
     test('1.1 registerUser - success',
         async () => {
-            mockPool.query
-                .mockResolvedValueOnce(rows([]))
-                .mockResolvedValueOnce(rows({id: 1, name: 'alice'}));
-
+            mockPool.query.mockResolvedValueOnce(rows([])).mockResolvedValueOnce(rows({id: 1, name: 'alice'}));
             bcrypt.hash.mockResolvedValue('hashed123');
 
             const result = await registerUser({name: 'alice', password: 'pass'}, mockPool);
@@ -88,7 +85,6 @@ describe('Restaurant Auth Functions', () => {
             .mockResolvedValueOnce(rows({ id: 10, name: 'KFC' }));
 
         bcrypt.hash.mockResolvedValue('balabalawhatever');
-
         const result = await registerRestaurant({ name: 'KFC', password: 'secret' }, mockPool);
         expect(result.status).toBe(201);
         expect(result.user.id).toBe(10);
@@ -103,7 +99,6 @@ describe('Restaurant Auth Functions', () => {
 
     test('2.3 loginRestaurant - not found', async () => {
         mockPool.query.mockResolvedValueOnce(rows([]));
-
         const result = await loginRestaurant({ name: 'unknown', password: 'x' }, mockPool);
         expect(result.status).toBe(400);
         expect(result.error).toBe('Username Not Found');
@@ -112,7 +107,6 @@ describe('Restaurant Auth Functions', () => {
     test('2.4 loginRestaurant - success', async () => {
         mockPool.query.mockResolvedValueOnce(rows({ id: 5, name: 'IN&OUTS', password: 'hash' }));
         bcrypt.compare.mockResolvedValue(true);
-
         const result = await loginRestaurant({ name: 'IN&OUTS', password: 'pass' }, mockPool);
         expect(result.status).toBe(201);
         expect(jwt.sign).toHaveBeenCalledWith(
@@ -139,7 +133,6 @@ describe('Admin Operations', () => {
 
     test('3.1 adminLogin - success', async () => {
         mockPool.query.mockResolvedValueOnce(rows({ name: 'admin1', password: 'adminpass' }));
-
         const result = await adminLogin({ name: 'admin1', password: 'adminpass' }, mockPool);
         expect(result.status).toBe(201);
         expect(result.token).toBeDefined();
@@ -159,12 +152,11 @@ describe('Admin Operations', () => {
             .mockResolvedValueOnce({});
 
         const result = await manageQueue(
-            { approved_list: [{ id: 1 }], denied_list: [{ id: 2 }] },
+            { approved_list: [{ id: 1 }], denied_list: [{ id: 2 }]},
             'valid-token',
             mockPool,
             mockCheckAll
         );
-
         expect(result.status).toBe(200);
         expect(mockPool.query).toHaveBeenCalledWith(
             expect.stringContaining('INSERT INTO restaurant'),
@@ -181,21 +173,18 @@ describe('Admin Operations', () => {
             mockPool,
             mockCheckAll
         );
-
         expect(result.status).toBe(400);
         expect(result.error).toContain('Missing \'name\'');
     });
 
     test('3.5 manageQueue - unauthorized', async () => {
         mockCheckAll.mockResolvedValue({ status: 403, message: 'Forbidden' });
-
         const result = await manageQueue(
             { approved_list: [], denied_list: [] },
             'bad token',
             mockPool,
             mockCheckAll
         );
-
         expect(result.status).toBe(403);
     });
 });
@@ -206,9 +195,7 @@ describe('Restaurant operations', () => {
     test('4.1 uploadRestaurant - success', async () => {
         const data = { name: 'SushiPlace', cuisine: 'Japanese' };
         mockPool.query.mockResolvedValueOnce({});
-
         const result = await uploadRestaurant({ data }, 'token', mockPool, mockCheckAll);
-
         expect(result.status).toBe(200);
         expect(mockPool.query).toHaveBeenCalledWith(
             'INSERT INTO queue (restaurant_info) VALUES ($1::jsonb)',
@@ -226,7 +213,6 @@ describe('Restaurant operations', () => {
         mockPool.query
             .mockResolvedValueOnce(rows({}))
             .mockResolvedValueOnce({});
-
         const data = { id: 7, phone: '123-456' };
         const result = await updateRestaurant(data, 'token', mockPool, mockCheckAll);
         expect(result.status).toBe(200);
@@ -238,14 +224,12 @@ describe('Restaurant operations', () => {
 
     test('4.4 updateRestaurant - not found', async () => {
         mockPool.query.mockResolvedValueOnce(rows([]));
-
         const result = await updateRestaurant({ id: 999 }, 'token', mockPool, mockCheckAll);
         expect(result.status).toBe(404);
     });
 
     test('4.5 updateRestaurant - unauthorized', async () => {
         mockCheckAll.mockResolvedValue({ status: 403, message: 'Forbidden' });
-
         const result = await updateRestaurant({ id: 1 }, 'bad', mockPool, mockCheckAll);
         expect(result.status).toBe(403);
     });

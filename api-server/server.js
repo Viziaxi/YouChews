@@ -65,7 +65,7 @@ app.post('/admin_login', async (req, res) => {
 });
 
 app.post('/manage_queue', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1]; // Bearer <token>
+    const token = req.headers.authorization?.split(' ')[1];
     const result = await manageQueue(req.body, token, pool, check_all);
     res.status(result.status).send(result);
 });
