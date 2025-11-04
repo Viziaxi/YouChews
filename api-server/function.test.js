@@ -267,5 +267,7 @@ describe('User Operations', () => {
             ]));
         
         const result = await getRecommendations([9, 10, 11], [10, 9], [0.5, 1.0], mockPool, 2);
+        expect(result[0]).toBe(11);
+        expect(result[1]).toBe(10);
     });
 });

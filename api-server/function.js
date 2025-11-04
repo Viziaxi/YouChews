@@ -293,11 +293,9 @@ async function getRecommendations(ids, user_prefs_ids, user_prefs_levels, pool, 
         }
         const content_string = JSON.stringify(restaruant_info.rows);
         const userdata_string = JSON.stringify(user_info);
-        console.log(content_string);
-        console.log(userdata_string);
 
         let runPython = new Promise(function(success, nosuccess) {
-            const pythonProcess = spawn('recommender-system/Scripts/python.exe', ['recommender-system/src/main.py', content_string, userdata_string, num]);
+            const pythonProcess = spawn('../recommender-system/Scripts/python.exe', ['../recommender-system/src/main.py', content_string, userdata_string, num]);
 
             pythonProcess.stdout.on('data', function(data) {
                 success(data);
@@ -307,14 +305,9 @@ async function getRecommendations(ids, user_prefs_ids, user_prefs_levels, pool, 
                 nosuccess(data);
             });
         });
-        
-        runPython.then(function(data) {
-            console.log(data.toString());
-        }).catch((reason) => {
-            console.error(reason);
-        });
 
-        await runPython
+        let result_string = await runPython;
+        return JSON.parse(result_string);
     } catch (error) {
         console.error(error);
         return { status: 500, error: error.message };
