@@ -6,7 +6,8 @@ const {
     adminLogin,
     manageQueue,
     uploadRestaurant,
-    updateRestaurant
+    updateRestaurant,
+    getRecommendations
 } = require('./function.js');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -232,5 +233,39 @@ describe('Restaurant operations', () => {
         mockCheckAll.mockResolvedValue({ status: 403, message: 'Forbidden' });
         const result = await updateRestaurant({ id: 1 }, 'bad', mockPool, mockCheckAll);
         expect(result.status).toBe(403);
+    });
+});
+
+describe('User Operations', () => {
+    test('5.1 getRecommendations', async () => {
+        mockPool.query
+            .mockResolvedValueOnce(rows([
+                {
+                    id: 9,
+                    name: 'Panda Expression',
+                    price: 'low',
+                    service_style: 'fast food',
+                    menu: ['Orange Chicken','Egg Roll','Soup Dumplings','Fried Rice'],
+                    flavors: ['spicy','sweet']
+                },
+                {
+                    id: 10,
+                    name: 'Six Guys',
+                    price: 'low',
+                    service_style: 'fast food',
+                    menu: ['Signature Double','Signature Single','Baconburger'],
+                    flavors: ['savory','fresh']
+                },
+                {
+                    id: 11,
+                    name: 'Dave\'s Pretty Hot Chicken',
+                    price: 'low',
+                    service_style: 'fast food',
+                    menu: ['Dave\'s #2','Dave\'s #3','Mac n Cheese'],
+                    flavors: ['spicy']
+                },
+            ]));
+        
+        const result = await getRecommendations([9, 10, 11], [10, 9], [0.5, 1.0], mockPool, 2);
     });
 });

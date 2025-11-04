@@ -275,23 +275,29 @@ async function updateRestaurant(data, token, pool, check_all) {
     }
 }
 
-async function getRecommendations(ids, user_prefs_ids, pool, num) {
+async function getRecommendations(ids, user_prefs_ids, user_prefs_levels, pool, num) {
     try {
         const restaruant_info = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', ids);
         if (restaruant_info.rows.length === 0) {
             return { status: 404, error: 'Restaurant record not found for given IDs' };
         }
 
-        const user_info = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', user_prefs_ids);
+        const user_restaurants = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', user_prefs_ids);
         if (restaruant_info.rows.length === 0) {
             return { status: 404, error: 'User has no preferences' };
         }
 
-        const content_string = JSON.stringify(restaruant_info);
+        const user_info = {
+            item_id: user_prefs_ids,
+            like_level: user_prefs_levels
+        }
+        const content_string = JSON.stringify(restaruant_info.rows);
         const userdata_string = JSON.stringify(user_info);
+        console.log(content_string);
+        console.log(userdata_string);
 
         let runPython = new Promise(function(success, nosuccess) {
-            const pythonProcess = spawn('python', ['recommender-system/src/main.py', content_string, userdata_string, num]);
+            const pythonProcess = spawn('recommender-system/Scripts/python.exe', ['recommender-system/src/main.py', content_string, userdata_string, num]);
 
             pythonProcess.stdout.on('data', function(data) {
                 success(data);
@@ -304,7 +310,11 @@ async function getRecommendations(ids, user_prefs_ids, pool, num) {
         
         runPython.then(function(data) {
             console.log(data.toString());
+        }).catch((reason) => {
+            console.error(reason);
         });
+
+        await runPython
     } catch (error) {
         console.error(error);
         return { status: 500, error: error.message };
