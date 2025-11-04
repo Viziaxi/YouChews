@@ -1,4 +1,5 @@
 id,flavors,menu,name,price,service_style
 0,"['spicy','sweet']","['Orange Chicken','Egg Roll','Soup Dumplings','Fried Rice']",Panda Expression,low price,fast food
 1,"['savory','fresh']","['Signature Double','Signature Single','Baconburger']",Six Guys,low price,fancy food
-3,"['spicy']","['Dave\'s #3','Mac n Cheese']",Dave's Pretty Hot Chicken,low price,fast food
+2,"['spicy']","['Dave\'s #3','Mac n Cheese']",Dave's Pretty Hot Chicken,low price,fast food
+3,"['savory']","['half half burger','human style fries','milk shake']", Left-to-Right, low price, fast food
