@@ -14,7 +14,7 @@ TEST_PATH = pathlib.Path(__file__).parent.parent / "testdata"
 def use_testdata(count: int) -> list[int]:
     restaurants = pd.read_csv((TEST_PATH / "restaurants.csv").resolve(), quotechar='"', index_col=False)
     userdata = pd.read_csv((TEST_PATH / "userdata.csv").resolve(), quotechar='"', index_col=False)
-    return contentbasedsystem.find_next(restaurants, userdata, 0, count)
+    return contentbasedsystem.find_next(restaurants, userdata, count)
 
 def execute_from_args() -> list[int]:
     content_json = sys.argv[1]
@@ -23,7 +23,7 @@ def execute_from_args() -> list[int]:
     
     content = pd.read_json(StringIO(content_json))
     userdata = pd.read_json(StringIO(userdata_json))
-    return contentbasedsystem.find_next(content, userdata, 0, item_count)
+    return contentbasedsystem.find_next(content, userdata, item_count)
 
 class NpEncoder(json.JSONEncoder):
     def default(self, o):
