@@ -29,12 +29,9 @@ def create_vector_string(data) -> str:
 
     return result
 
-def to_ints(content: pd.DataFrame, *args: str):
-    for feature in args:
-        content[feature] = content[feature].astype(int)
-
-def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_row=0):
-    to_ints(userdata, "item_id", "like_level")
+def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_id: int, num: int = 1) -> list[int]:
+    userdata["item_id"] = userdata["item_id"].astype(int)
+    userdata["like_level"] = userdata["like_level"].astype(float)
     userdata.sort_values("like_level", ascending=False, inplace=True, ignore_index=True)
 
     original = content.copy()
@@ -43,8 +40,9 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_row=0):
         content[col] = content[col].apply(prepare_strings)
     
     eval_features(content, "flavors", "menu")
-    print(content.to_string())
-    print(userdata.to_string())
+
+    #print(content.to_string())
+    #print(userdata.to_string())
     
     selected: pd.DataFrame = content.loc[[id for id in userdata["item_id"]]]
     contentvectors = content.apply(create_vector_string, axis=1)
@@ -56,12 +54,15 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_row=0):
     usermatrix = usercount.fit_transform(uservectors)
     sim_matrix = cosine_similarity(usermatrix, contentmatrix)
 
-    print(sim_matrix)
+    #print(sim_matrix)
 
-    print(f"Because you liked {original["name"][userdata["item_id"][source_row]]}:")
-    indexed_scores = [pair for pair in enumerate(sim_matrix[source_row]) if pair[0] != source_row]
+    source_content_row = content.index[content["id"] == source_id][0]
+    source_userdata_row = userdata.index[userdata["item_id"] == source_id][0]
+    #print(f"Because you liked {original["name"][source_content_row]}:")
+    indexed_scores = [pair for pair in enumerate(sim_matrix[source_userdata_row]) if pair[0] != source_content_row]
     indexed_scores = sorted(indexed_scores, key=lambda pair: pair[1], reverse=True)
-    best_item_row = indexed_scores[0][0]
-    print(f"Try {original["name"][best_item_row]}")
-
-    pass
+    num = min(num, len(indexed_scores))
+    best_rows = [pair[0] for pair in indexed_scores[:num]]
+    
+    #print([original["name"][row] for row in best_rows])
+    return [content["id"][row] for row in best_rows]
