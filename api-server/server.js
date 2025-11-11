@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('./config.js');
-const { check_all } = require('./auth_helpers.js');
+const { check_all } = require('./auth_helper.js');
 const {
     registerUser,
     loginUser,
@@ -13,7 +13,7 @@ const {
     manageQueue,
     uploadRestaurant,
     updateRestaurant
-} = require('./logic.js');
+} = require('./function.js');
 
 const pool = new Pool({
     user: config.db.user,

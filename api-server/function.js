@@ -275,27 +275,12 @@ async function updateRestaurant(data, token, pool, check_all) {
     }
 }
 
-async function getRecommendations(ids, user_prefs_ids, user_prefs_levels, pool, num) {
+async function getRecommendations(restaurant_ids, user_id, num) {
     try {
-        const restaruant_info = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', ids);
-        if (restaruant_info.rows.length === 0) {
-            return { status: 404, error: 'Restaurant record not found for given IDs' };
-        }
-
-        const user_restaurants = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', user_prefs_ids);
-        if (restaruant_info.rows.length === 0) {
-            return { status: 404, error: 'User has no preferences' };
-        }
-
-        const user_info = {
-            item_id: user_prefs_ids,
-            like_level: user_prefs_levels
-        }
-        const content_string = JSON.stringify(restaruant_info.rows);
-        const userdata_string = JSON.stringify(user_info);
+        const content_ids_string = JSON.stringify(restaurant_ids);
 
         let runPython = new Promise(function(success, nosuccess) {
-            const pythonProcess = spawn('../recommender-system/Scripts/python.exe', ['../recommender-system/src/main.py', content_string, userdata_string, num]);
+            const pythonProcess = spawn('../recommender-system/Scripts/python.exe', ['../recommender-system/src/main.py', content_ids_string, user_id, num]);
 
             pythonProcess.stdout.on('data', function(data) {
                 success(data);

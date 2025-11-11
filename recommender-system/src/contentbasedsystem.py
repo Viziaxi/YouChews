@@ -34,8 +34,6 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, num: int = 1) -> li
     userdata["item_id"] = userdata["item_id"].astype(int)
     userdata["like_level"] = userdata["like_level"].astype(float)
     userdata.sort_values("like_level", ascending=False, inplace=True, ignore_index=True)
-
-    original = content.copy()
     
     for col in ("flavors", "menu", "name", "price", "service_style"):
         content[col] = content[col].apply(prepare_strings)
