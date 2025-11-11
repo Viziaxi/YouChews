@@ -1,7 +1,7 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const config = require('./config.js');
-const spawn = require('child_process').spawn;
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import config from './config.js';
+import { spawn } from 'child_process';
 
 async function registerUser({name, password}, pool) {
     try {
@@ -268,7 +268,7 @@ async function updateRestaurant(data, token, pool, check_all) {
             [data.id, JSON.stringify(data)]// does not support nested merge, leave here for now
         );
 
-        return { status: 200, message: 'Successfully updated restaurant_info JSON' };postgres
+        return { status: 200, message: 'Successfully updated restaurant_info JSON' };
     } catch (error) {
         console.error(error);
         return { status: 500, error: error.message };
@@ -298,7 +298,7 @@ async function getRecommendations(token, pool, data,check_all,numRecommendations
             return { status: 404, error: 'User not found' };
         }
         const contentRes = await pool.query(
-            `SELECT id, 
+            `SELECT id,
                     restaurant_info->>'flavors' AS flavors,
                     restaurant_info->>'menu' AS menu,
                     restaurant_info->>'name' AS name,
@@ -310,8 +310,8 @@ async function getRecommendations(token, pool, data,check_all,numRecommendations
         const contentData = contentRes.rows;
         const userData = res.rows[0].user_preferences;
 
-        const contentString = prepareDataForPython(contentData);
-        const userDataString = prepareDataForPython(userData);
+        const contentString = await prepareDataForPython(contentData);
+        const userDataString = await prepareDataForPython(userData);
 
         const runPython = new Promise((resolve, reject) => {
             const pythonProcess = spawn('python', [
@@ -431,7 +431,7 @@ async function logPreference(data,token,pool,check_all) {
     }
 }
 
-module.exports = {
+export {
     registerUser,
     loginUser,
     registerRestaurant,
