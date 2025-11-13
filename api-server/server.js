@@ -12,7 +12,9 @@ const {
     adminLogin,
     manageQueue,
     uploadRestaurant,
-    updateRestaurant
+    updateRestaurant,
+    logPreference,
+    getRecommendations
 } = require('./function.js');
 
 const pool = new Pool({
@@ -28,15 +30,13 @@ pool.connect()
     .catch((err) => console.error('Database connection error:', err));
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
-// Home
 app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
 });
 
-// User Routes
 app.post('/register', async (req, res) => {
     const result = await registerUser(req.body, pool);
     res.status(result.status).send(result);
@@ -47,7 +47,6 @@ app.post('/login', async (req, res) => {
     res.status(result.status).send(result);
 });
 
-// Restaurant Routes
 app.post('/restaurant_register', async (req, res) => {
     const result = await registerRestaurant(req.body, pool);
     res.status(result.status).send(result);
@@ -58,27 +57,53 @@ app.post('/restaurant_login', async (req, res) => {
     res.status(result.status).send(result);
 });
 
-// Admin Routes
 app.post('/admin_login', async (req, res) => {
     const result = await adminLogin(req.body, pool);
     res.status(result.status).send(result);
 });
 
 app.post('/manage_queue', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
     const result = await manageQueue(req.body, token, pool, check_all);
     res.status(result.status).send(result);
 });
 
 app.post('/upload_restaurant', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
     const result = await uploadRestaurant(req.body, token, pool, check_all);
     res.status(result.status).send(result);
 });
 
 app.post('/update_restaurant', async (req, res) => {
-    const token = req.headers.authorization?.split(' ')[1];
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
     const result = await updateRestaurant(req.body.data, token, pool, check_all);
+    res.status(result.status).send(result);
+});
+
+app.get('/getRecommendation', async (req, res) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    const result = await getRecommendations(token, pool, req.body.res, check_all, 1);
+    res.status(result.status).send(result);
+});
+
+app.post('/logPreference', async (req, res) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    const result = await logPreference(req.body.res, token, pool, check_all);
     res.status(result.status).send(result);
 });
 
