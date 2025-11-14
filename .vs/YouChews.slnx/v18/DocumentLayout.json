@@ -1,0 +1,103 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|solutionrelative:recommender-system\\src\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\config.ini||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|solutionrelative:recommender-system\\src\\config.ini||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\contentbasedsystem.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|solutionrelative:recommender-system\\src\\contentbasedsystem.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\testdata\\restaurants.csv||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{9BDC7CAD-53E5-44BD-A3C1-DA826F5D1699}|recommender-system\\recommender-system.pyproj|solutionrelative:recommender-system\\src\\testdata\\restaurants.csv||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{089100B1-113F-4E66-888A-E83F3999EAFD}|Solution Items{089100B1-113F-4E66-888A-E83F3999EAFD}|C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{089100B1-113F-4E66-888A-E83F3999EAFD}|Solution Items{089100B1-113F-4E66-888A-E83F3999EAFD}|solutionrelative:.gitignore||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "restaurants.csv",
+              "DocumentMoniker": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\testdata\\restaurants.csv",
+              "RelativeDocumentMoniker": "recommender-system\\src\\testdata\\restaurants.csv",
+              "ToolTip": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\testdata\\restaurants.csv",
+              "RelativeToolTip": "recommender-system\\src\\testdata\\restaurants.csv",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAACBAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002120|",
+              "WhenOpened": "2025-11-14T23:37:29.712Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "main.py",
+              "DocumentMoniker": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\main.py",
+              "RelativeDocumentMoniker": "recommender-system\\src\\main.py",
+              "ToolTip": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\main.py",
+              "RelativeToolTip": "recommender-system\\src\\main.py",
+              "ViewState": "AgIAAE4AAAAAAAAAAAAAAFkAAAAeAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-14T23:33:49.173Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "contentbasedsystem.py",
+              "DocumentMoniker": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\contentbasedsystem.py",
+              "RelativeDocumentMoniker": "recommender-system\\src\\contentbasedsystem.py",
+              "ToolTip": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\contentbasedsystem.py",
+              "RelativeToolTip": "recommender-system\\src\\contentbasedsystem.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-14T23:31:36.716Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "config.ini",
+              "DocumentMoniker": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\config.ini",
+              "RelativeDocumentMoniker": "recommender-system\\src\\config.ini",
+              "ToolTip": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\recommender-system\\src\\config.ini",
+              "RelativeToolTip": "recommender-system\\src\\config.ini",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAIAAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002768|",
+              "WhenOpened": "2025-11-14T23:31:23.867Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": ".gitignore",
+              "DocumentMoniker": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\.gitignore",
+              "RelativeDocumentMoniker": ".gitignore",
+              "ToolTip": "C:\\Users\\Davis\\Documents\\GitHub\\YouChews\\.gitignore",
+              "RelativeToolTip": ".gitignore",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-11-14T23:30:42.313Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
