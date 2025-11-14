@@ -10,7 +10,7 @@ from io import StringIO
 import contentbasedsystem
 
 CONFIG_PATH = pathlib.Path(__file__).parent / "config.ini"
-TEST_PATH = pathlib.Path(__file__).parent.parent / "testdata"
+TEST_PATH = pathlib.Path(__file__).parent / "testdata"
 
 def connect_database():
     try:
@@ -34,15 +34,26 @@ def execute_from_args(connection) -> list[int]:
     user_id = int(sys.argv[2])
     item_count = int(sys.argv[3])
 
-    content: pd.DataFrame
-    userdata: pd.DataFrame
+    content_rows: list[tuple]
+    content_columns: list[str]
+    userdata_rows: list[tuple]
+    userdata_columns: list[str]
 
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM restaurants WHERE id = $1", restaurant_ids)
-        content = pd.DataFrame(cursor.fetchall())
-        cursor.execute("SELECT prefs FROM users WHERE id = $1", user_id)
-        userdata = pd.DataFrame(cursor.fetchall())
+        content_columns = [desc[0] for desc in cursor.description]
+        content_rows = cursor.fetchall()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_preferences FROM users WHERE id = $1", user_id)
+        userdata_columns = [desc[0] for desc in cursor.description]
+        userdata_rows = cursor.fetchall()
     
+    restaurant_table = pd.DataFrame(content_rows, columns=content_columns)
+    content = pd.concat(restaurant_table["restaurant_info"])
+    content["id"] = restaurant_table["id"]
+
+    userdata = pd.DataFrame(userdata_rows, columns=userdata_columns)
+
     return contentbasedsystem.find_next(content, userdata, item_count)
 
 class NpEncoder(json.JSONEncoder):
@@ -70,15 +81,15 @@ def main():
     config.read(CONFIG_PATH.resolve())
     id_list = None
 
-    connection = connect_database()
-    if not connection:
-        print("Unable to connect to database")
-
     if config["Debug"]["use_test_csv"] == "True":
         id_list = use_testdata(int(config["Debug"]["test_return_count"]))
-    elif connection:
-        id_list = execute_from_args(connection)
-        connection.close()
+    else:
+        connection = connect_database()
+        if connection:
+            id_list = execute_from_args(connection)
+            connection.close()
+        else:
+            print("Unable to connect to database")
     
     print(json.dumps(id_list, cls=NpEncoder))
     sys.stdout.flush()
