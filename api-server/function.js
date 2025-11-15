@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('./config.js');
+const spawn = require('child_process').spawn;
 
 async function registerUser({name, password}, pool) {
     try {
@@ -274,6 +275,30 @@ async function updateRestaurant(data, token, pool, check_all) {
     }
 }
 
+async function getRecommendations(restaurant_ids, user_id, num) {
+    try {
+        const content_ids_string = JSON.stringify(restaurant_ids);
+
+        let runPython = new Promise(function(success, nosuccess) {
+            const pythonProcess = spawn('../recommender-system/Scripts/python.exe', ['../recommender-system/src/main.py', content_ids_string, user_id, num]);
+
+            pythonProcess.stdout.on('data', function(data) {
+                success(data);
+            });
+
+            pythonProcess.stderr.on('data', function(data) {
+                nosuccess(data);
+            });
+        });
+
+        let result_string = await runPython;
+        return JSON.parse(result_string);
+    } catch (error) {
+        console.error(error);
+        return { status: 500, error: error.message };
+    }
+}
+
 module.exports = {
     registerUser,
     loginUser,
@@ -282,5 +307,6 @@ module.exports = {
     adminLogin,
     manageQueue,
     uploadRestaurant,
-    updateRestaurant
+    updateRestaurant,
+    getRecommendations,
 };
