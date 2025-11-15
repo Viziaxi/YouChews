@@ -4,3 +4,4 @@ recommender-system/Scripts
 recommender-system/share
 recommender-system/pyvenv.cfg
 recommender-system/src/__pycache__
+.vs
