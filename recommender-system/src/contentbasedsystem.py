@@ -7,7 +7,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 
 def eval_features(data: pd.DataFrame, *args):
     for feature in args:
-        data[feature] = data[feature].fillna("[]").apply(literal_eval)
+        if data[feature].dtype == str:
+            data[feature] = data[feature].fillna("[]").apply(literal_eval)
 
 def prepare_strings(x):
     if isinstance(x, list):
@@ -29,24 +30,25 @@ def create_vector_string(data) -> str:
 
     return result
 
-def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_id: int, num: int = 1) -> list[int]:
+def find_next(content: pd.DataFrame, userdata: pd.DataFrame, num: int = 1) -> list[int]:
     userdata["item_id"] = userdata["item_id"].astype(int)
     userdata["like_level"] = userdata["like_level"].astype(float)
     userdata.sort_values("like_level", ascending=False, inplace=True, ignore_index=True)
-
-    original = content.copy()
     
-    for col in ("flavors", "menu", "name", "price", "service_style"):
+    for col in ("flavors", "menu", "name", "price", "service_style", "cuisine"):
         content[col] = content[col].apply(prepare_strings)
     
     eval_features(content, "flavors", "menu")
 
+    #print(content["id"].dtype)
+    #print(userdata["item_id"].dtype)
     #print(content.to_string())
     #print(userdata.to_string())
     
-    selected: pd.DataFrame = content.loc[[id for id in userdata["item_id"]]]
+    selected: pd.DataFrame = content[content["id"].isin(userdata["item_id"])]
     contentvectors = content.apply(create_vector_string, axis=1)
     uservectors = selected.apply(create_vector_string, axis=1)
+    #print(selected.to_string())
 
     contentcount = CountVectorizer(stop_words="english")
     contentmatrix = contentcount.fit_transform(contentvectors)
@@ -56,6 +58,7 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, source_id: int, num
 
     #print(sim_matrix)
 
+    source_id = userdata["item_id"][0]
     source_content_row = content.index[content["id"] == source_id][0]
     source_userdata_row = userdata.index[userdata["item_id"] == source_id][0]
     #print(f"Because you liked {original["name"][source_content_row]}:")
