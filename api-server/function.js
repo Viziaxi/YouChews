@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import config from './config.js';
 import { spawn } from 'child_process';
 
-async function registerUser({name, password}, pool) {
+export async function registerUser({name, password}, pool) {
     try {
         if (!name || !password) {
             return { status: 400 , error: 'Missing required field' };
@@ -37,7 +37,7 @@ async function registerUser({name, password}, pool) {
     }
 }
 
-async function loginUser({ name, password }, pool) {
+export async function loginUser({ name, password }, pool) {
     try {
         if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
@@ -72,13 +72,13 @@ async function loginUser({ name, password }, pool) {
     }
 }
 
-async function registerRestaurant({ name, password }, pool) {
+export async function registerRestaurant({ restaurant_username, password }, pool) {
     try {
-        if (!name || !password) {
+        if (!restaurant_username || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const check = await pool.query('SELECT name FROM restaurants WHERE name=$1', [name]);
+        const check = await pool.query('SELECT restaurant_username FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
         if (check.rows.length > 0) {
             return { status: 400, error: 'Username already exists' };
         }
@@ -86,13 +86,13 @@ async function registerRestaurant({ name, password }, pool) {
         const salt = 10;
         const hashed_password = await bcrypt.hash(password, salt);
         const result = await pool.query(
-            'INSERT INTO restaurants (name, password) VALUES ($1, $2) RETURNING *',
-            [name, hashed_password]
+            'INSERT INTO restaurants (restaurant_username, password) VALUES ($1, $2) RETURNING *',
+            [restaurant_username, hashed_password]
         );
 
         const restaurant = result.rows[0];
         const token = jwt.sign(
-            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
+            { id: restaurant.id, name: restaurant.restaurant_username, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
@@ -100,7 +100,7 @@ async function registerRestaurant({ name, password }, pool) {
         return {
             status: 200,
             message: 'Restaurant registered successfully',
-            user: { id: restaurant.id, name: restaurant.name },
+            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
             token
         };
     } catch (error) {
@@ -109,13 +109,13 @@ async function registerRestaurant({ name, password }, pool) {
     }
 }
 
-async function loginRestaurant({ name, password }, pool) {
+export async function loginRestaurant({ restaurant_username, password }, pool) {
     try {
-        if (!name || !password) {
+        if (!restaurant_username || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const restaurants = await pool.query('SELECT id, name, password FROM restaurants WHERE name=$1', [name]);
+        const restaurants = await pool.query('SELECT id, restaurant_username, password FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
         if (restaurants.rows.length < 1) {
             return { status: 400, error: 'Username Not Found' };
         }
@@ -127,7 +127,7 @@ async function loginRestaurant({ name, password }, pool) {
         }
 
         const token = jwt.sign(
-            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
+            { id: restaurant.id, restaurant_username: restaurant.restaurant_username, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
@@ -135,7 +135,7 @@ async function loginRestaurant({ name, password }, pool) {
         return {
             status: 200,
             message: 'restaruant login successfully',
-            user: { id: restaurant.id, name: restaurant.name },
+            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
             token
         };
     } catch (error) {
@@ -144,7 +144,7 @@ async function loginRestaurant({ name, password }, pool) {
     }
 }
 
-async function adminLogin({ name, password }, pool) {
+export async function adminLogin({ name, password }, pool) {
     try {
         if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
@@ -179,109 +179,14 @@ async function adminLogin({ name, password }, pool) {
     }
 }
 
-async function manageQueue({ approved_list = [], denied_list = [] }, token, pool, check_all) {
-    const check_authorization = await check_all('admin', token);
-    if (check_authorization.status !== 200) {
-        return { status: check_authorization.status, error: check_authorization.message };
-    }
-
-    for (const item of approved_list) {
-        const { id: itemId } = item;
-        const selectResult = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', [itemId]);
-        const row = selectResult.rows[0];
-
-        if (!row) {
-            return { status: 404, error: `Data not found for ID: ${itemId}` };
-        }
-
-        const { restaurant_info: restaurantInfo } = row;
-        if (!restaurantInfo?.name) {
-            return { status: 400, error: `Missing 'name' in restaurant_info for ID: ${itemId}` };
-        }
-
-        try {
-            await pool.query(
-                'INSERT INTO restaurant (name, password, restaurant_info) VALUES ($1, $2, $3)',
-                [restaurantInfo.name, '12345678', restaurantInfo]
-            );
-            await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
-        } catch (error) {
-            console.error(`DB error for ID ${itemId}:`, error);
-            return { status: 500, error: `Failed to process ID: ${itemId}` };
-        }
-    }
-
-    for (const { id: itemId } of denied_list) {
-        const selectDelete = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', [itemId]);
-        if (selectDelete.rows.length === 0) {
-            return { status: 400, error: `Item not found for ${itemId}` };
-        }
-        try {
-            await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
-        } catch (error) {
-            return { status: 500, error: `Failed to delete item ${itemId}` };
-        }
-    }
-
-    return {
-        status: 200,
-        message: `Successfully processed ${approved_list.length + denied_list.length} restaurants.`
-    };
-}
-
-async function uploadRestaurant({ data }, token, pool, check_all) {
-    const check_authorization = await check_all('restaurant', token);
-    if (check_authorization.status !== 200) {
-        return { status: check_authorization.status, error: check_authorization.message };
-    }
-
-    if (!data?.name) {
-        return { status: 400, error: 'Missing required field: name' };
-    }
-
-    try {
-        await pool.query('INSERT INTO queue (restaurant_info) VALUES ($1::jsonb)', [JSON.stringify(data)]);
-        return { status: 200, message: 'Successfully inserted to queue' };
-    } catch (error) {
-        return { status: 500, error: error.message };
-    }
-}
-
-async function updateRestaurant(data, token, pool, check_all) {
-    if (!data || !data.id) {
-        return { status: 400, error: 'Missing required field: data.id' };
-    }
-
-    const check_authorization = await check_all('restaurant', token);
-    if (check_authorization.status !== 200) {
-        return { status: check_authorization.status, error: check_authorization.message };
-    }
-
-    try {
-        const existing = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', [data.id]);
-        if (existing.rows.length === 0) {
-            return { status: 404, error: 'Restaurant record not found for given ID' };
-        }
-
-        await pool.query(
-            `UPDATE queue SET restaurant_info = restaurant_info || $2::jsonb WHERE id = $1`,
-            [data.id, JSON.stringify(data)]// does not support nested merge, leave here for now
-        );
-
-        return { status: 200, message: 'Successfully updated restaurant_info JSON' };
-    } catch (error) {
-        console.error(error);
-        return { status: 500, error: error.message };
-    }
-}
 
 async function prepareDataForPython(data) {
     return JSON.stringify(data).replace(/"/g, '\\"');
 }
 
-async function getRecommendations(token, pool, data,check_all,numRecommendations) {
+export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
     try {
-        const check_authorization = await check_all('restaurant', token);
+        const check_authorization = await check_all('user', token);
         if (check_authorization.status !== 200) {
             return { status: check_authorization.status, error: check_authorization.message };
         }
@@ -359,7 +264,7 @@ async function getRecommendations(token, pool, data,check_all,numRecommendations
     }
 }
 
-async function logPreference(data,token,pool,check_all) {
+export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {
         return { status: 400, error: 'Missing required field: data.id' };
     }
@@ -418,7 +323,6 @@ async function logPreference(data,token,pool,check_all) {
                 });
             }
         }
-        // Save back to DB
         await pool.query(
             'UPDATE users SET user_preferences = $1::jsonb WHERE id = $2',
             [JSON.stringify(currentPrefs), userId]
@@ -430,16 +334,3 @@ async function logPreference(data,token,pool,check_all) {
         return { status: 500, error: error.message };
     }
 }
-
-export {
-    registerUser,
-    loginUser,
-    registerRestaurant,
-    loginRestaurant,
-    adminLogin,
-    manageQueue,
-    uploadRestaurant,
-    updateRestaurant,
-    getRecommendations,
-    logPreference
-};
