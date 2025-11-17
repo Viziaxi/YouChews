@@ -22,9 +22,10 @@ import {
 
 
 const pool = new Pool({
-  URL: "postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a/youchews_db_xoi5",
-  ssl: { rejectUnauthorized: false }, // Required for Render
+  connectionString: "postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a.oregon-postgres.render.com/youchews_db_xoi5",
+  ssl: { rejectUnauthorized: false }
 });
+
 
 pool.connect()
     .then(() => console.log('Connected to PostgreSQL successfully!'))
