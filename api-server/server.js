@@ -19,12 +19,11 @@ import {
     find_restaurant,
 } from "./restaurant_operations.js";
 
+
+
 const pool = new Pool({
-    user: config.db.user,
-    host: config.db.host,
-    password: config.db.password,
-    port: config.db.port,
-    database: config.db.database,
+  connectionString: config.databaseUrl,
+  ssl: { rejectUnauthorized: false }, // Required for Render
 });
 
 pool.connect()
