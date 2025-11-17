@@ -6,7 +6,6 @@ import configparser
 import pathlib
 import psycopg2
 import json
-from io import StringIO
 
 import contentbasedsystem
 
