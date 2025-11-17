@@ -22,7 +22,7 @@ import {
 
 
 const pool = new Pool({
-  connectionString: config.databaseUrl,
+  URL: "postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a/youchews_db_xoi5",
   ssl: { rejectUnauthorized: false }, // Required for Render
 });
 
