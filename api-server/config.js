@@ -5,7 +5,7 @@ const config = {
   databaseUrl: process.env.DATABASE_URL,
   port: process.env.PORT || 3000,
   jwt:{
-      secret:process.env.JWT_SECR
+      secret:process.env.JWT_SECRET,
   },
 };
 export default config
