@@ -1,7 +1,7 @@
-const jwt = require("jsonwebtoken");
-const config = require("./config.js");
+import jwt from "jsonwebtoken";
+import config from "./config.js";
 
-async function check_token(JWTtoken) {
+export async function check_token(JWTtoken) {
     try{
         const payload = jwt.verify(JWTtoken, config.jwt.secret);
         return {
@@ -34,7 +34,7 @@ async function check_token(JWTtoken) {
     }
 }
 
-async function check_authorization_type(target,src) {
+export async function check_authorization_type(target,src) {
     if (target !== src.user.role){
         return {
             status: 403,
@@ -48,7 +48,7 @@ async function check_authorization_type(target,src) {
     }
 }
 
-async function check_all(authorization_type ,auth_token){
+export async function check_all(authorization_type ,auth_token){
     const check = await check_token(auth_token)
     if (check.status !== 200) {
         return check;
@@ -63,9 +63,3 @@ async function check_all(authorization_type ,auth_token){
         message: "Authentication and authorization successful."
     };
 }
-
-module.exports = {
-    check_token,
-    check_authorization_type,
-    check_all
-};

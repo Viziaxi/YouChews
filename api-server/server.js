@@ -1,21 +1,23 @@
-const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const config = require('./config.js');
-const { check_all } = require('./auth_helper.js');
-const {
+import express from 'express';
+import { Pool } from 'pg';
+import config from './config.js';
+import { check_all } from './auth_helper.js';
+import {
     registerUser,
     loginUser,
     registerRestaurant,
     loginRestaurant,
     adminLogin,
-    manageQueue,
-    uploadRestaurant,
-    updateRestaurant,
     logPreference,
     getRecommendations
-} = require('./function.js');
+} from './function.js';
+
+import {
+    manageQueue,
+    uploadRestaurant,
+    view_queue,
+    find_restaurant,
+} from "./restaurant_operations.js";
 
 const pool = new Pool({
     user: config.db.user,
@@ -80,14 +82,23 @@ app.post('/upload_restaurant', async (req, res) => {
     res.status(result.status).send(result);
 });
 
-app.post('/update_restaurant', async (req, res) => {
+app.get('/find_restaurant', async (req, res) => {
     if (!req.headers.authorization) {
         return res.status(401).send({ error: 'Authorization header missing' });
     }
     const token = req.headers.authorization.split(' ')[1];
-    const result = await updateRestaurant(req.body.data, token, pool, check_all);
+    const result = await find_restaurant(req.body, token, pool, check_all);
     res.status(result.status).send(result);
-});
+})
+
+app.get('/get_queue',async (req,res)=>{
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    const result = await view_queue(token, pool, check_all);
+    res.status(result.status).send(result);
+})
 
 app.get('/getRecommendation', async (req, res) => {
     if (!req.headers.authorization) {
@@ -106,6 +117,7 @@ app.post('/logPreference', async (req, res) => {
     const result = await logPreference(req.body.res, token, pool, check_all);
     res.status(result.status).send(result);
 });
+
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
