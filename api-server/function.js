@@ -179,11 +179,6 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
-
-async function prepareDataForPython(data) {
-    return JSON.stringify(data).replace(/"/g, '\\"');
-}
-
 export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
     try {
         const check_authorization = await check_all('user', token);
