@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
-import config from './config.js';
 import { check_all } from './auth_helper.js';
+import cors from 'cors';
 import {
     registerUser,
     loginUser,
@@ -11,7 +11,7 @@ import {
     logPreference,
     getRecommendations
 } from './function.js';
-import cors from 'cors';
+
 import {
     manageQueue,
     uploadRestaurant,
@@ -38,7 +38,6 @@ app.use(cors({
   credentials: true,
 }));
 
-app.options("*", cors());
 
 app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
