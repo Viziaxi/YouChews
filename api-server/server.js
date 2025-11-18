@@ -11,15 +11,13 @@ import {
     logPreference,
     getRecommendations
 } from './function.js';
-
+import cors from 'cors';
 import {
     manageQueue,
     uploadRestaurant,
     view_queue,
     find_restaurant,
 } from "./restaurant_operations.js";
-
-
 
 const pool = new Pool({
   connectionString: "postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a.oregon-postgres.render.com/youchews_db_xoi5",
@@ -34,6 +32,13 @@ pool.connect()
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
+
+app.use(cors({
+  origin: true,  // allows all origins
+  credentials: true,
+}));
+
+app.options("*", cors());
 
 app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
