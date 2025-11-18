@@ -203,27 +203,17 @@ export async function getRecommendations(token, pool, data,check_all,numRecommen
             return { status: 404, error: 'User not found' };
         }
         const contentRes = await pool.query(
-            `SELECT id,
-                    restaurant_info->>'flavors' AS flavors,
-                    restaurant_info->>'menu' AS menu,
-                    restaurant_info->>'name' AS name,
-                    restaurant_info->>'price' AS price,
-                    restaurant_info->>'service_style' AS service_style
-             FROM restaurants`
+            `SELECT id FROM restaurants;`
         );
 
-        const contentData = contentRes.rows;
-        const userData = res.rows[0].user_preferences;
-
-        const contentString = await prepareDataForPython(contentData);
-        const userDataString = await prepareDataForPython(userData);
+        const idList = contentRes.rows.map(r => r.id);
 
         const runPython = new Promise((resolve, reject) => {
             const pythonProcess = spawn('python', [
                 '../recommender-system/src/main.py',
-                contentString,
-                userDataString,
-                numRecommendations.toString()
+                idList,
+                userId,
+                numRecommendations
             ]);
 
             let stdoutData = '';
