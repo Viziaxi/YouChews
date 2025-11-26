@@ -24,7 +24,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-
 pool.connect()
     .then(() => console.log('Connected to PostgreSQL successfully!'))
     .catch((err) => console.error('Database connection error:', err));

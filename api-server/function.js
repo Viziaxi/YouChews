@@ -63,7 +63,7 @@ export async function loginUser({ name, password }, pool) {
         return {
             status: 200,
             message: 'User login successfully',
-            user: { id: user.id, name: user.name },
+            user: { id: user.id, name: user.name},
             token
         };
     } catch (error) {
@@ -72,13 +72,13 @@ export async function loginUser({ name, password }, pool) {
     }
 }
 
-export async function registerRestaurant({ restaurant_username, password }, pool) {
+export async function registerRestaurant({ name, password }, pool) {
     try {
-        if (!restaurant_username || !password) {
+        if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const check = await pool.query('SELECT restaurant_username FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
+        const check = await pool.query('SELECT name FROM restaurants WHERE name=$1', [name]);
         if (check.rows.length > 0) {
             return { status: 400, error: 'Username already exists' };
         }
@@ -86,13 +86,13 @@ export async function registerRestaurant({ restaurant_username, password }, pool
         const salt = 10;
         const hashed_password = await bcrypt.hash(password, salt);
         const result = await pool.query(
-            'INSERT INTO restaurants (restaurant_username, password) VALUES ($1, $2) RETURNING *',
-            [restaurant_username, hashed_password]
+            'INSERT INTO restaurants (name, password) VALUES ($1, $2) RETURNING *',
+            [name, hashed_password]
         );
 
         const restaurant = result.rows[0];
         const token = jwt.sign(
-            { id: restaurant.id, name: restaurant.restaurant_username, role: 'restaurant' },
+            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
@@ -100,7 +100,7 @@ export async function registerRestaurant({ restaurant_username, password }, pool
         return {
             status: 200,
             message: 'Restaurant registered successfully',
-            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
+            user: { id: restaurant.id, name: restaurant.name },
             token
         };
     } catch (error) {
@@ -109,13 +109,13 @@ export async function registerRestaurant({ restaurant_username, password }, pool
     }
 }
 
-export async function loginRestaurant({ restaurant_username, password }, pool) {
+export async function loginRestaurant({ name, password }, pool) {
     try {
-        if (!restaurant_username || !password) {
+        if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const restaurants = await pool.query('SELECT id, restaurant_username, password FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
+        const restaurants = await pool.query('SELECT id, name, password FROM restaurants WHERE name=$1', [name]);
         if (restaurants.rows.length < 1) {
             return { status: 400, error: 'Username Not Found' };
         }
@@ -127,15 +127,15 @@ export async function loginRestaurant({ restaurant_username, password }, pool) {
         }
 
         const token = jwt.sign(
-            { id: restaurant.id, restaurant_username: restaurant.restaurant_username, role: 'restaurant' },
+            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
 
         return {
             status: 200,
-            message: 'restaruant login successfully',
-            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
+            message: 'restaurant login successfully',
+            user: { id: restaurant.id, name: restaurant.name },
             token
         };
     } catch (error) {
