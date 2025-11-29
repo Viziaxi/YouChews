@@ -1,17 +1,22 @@
-import './index.css'
-import { BrowserRouter , Route, Routes} from 'react-router-dom'
-import React from "react";
-import Login from './pages/Login.jsx';
-import Register from './pages/register.jsx';
+import { Route, Routes } from 'react-router-dom';
+import Login from './components/Login.jsx';
+import Register from './components/register.jsx';
+import Placeholder from "./pages/test_page.jsx";
 
 function App() {
-    return (
-        <>
-            <Routes>
-                <Route path="/Login" element={<Login/>} />
-                <Route path="/Register" element={<Register/>} />
-            </Routes>
-        </>
-    )
+  return (
+    <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/placeholder" element={<Placeholder />} />
+
+        <Route path="/register" element={<Register userType="user" />} />
+        <Route path="/restaurant_register" element={<Register userType="restaurant" />} />
+
+        <Route path="/login" element={<Login userType="user" />} />
+        <Route path="/restaurant_login" element={<Login userType="restaurant" />} />
+        <Route path="/admin_login" element={<Login userType="admin" />} />
+    </Routes>
+  );
 }
+
 export default App;
