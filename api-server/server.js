@@ -103,92 +103,15 @@ app.get('/get_queue',async (req,res)=>{
     res.status(result.status).send(result);
 })
 
-app.get('/getRecommendation', async (req, res) => {
-  // 1. Auth check
-  if (!req.headers.authorization?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Invalid or missing Authorization header' });
-  }
-
-  const token = req.headers.authorization.split(' ')[1];
-
-  // 2. Get user's location from query params (sent by frontend)
-  const { lat, lon, radius = 10 } = req.query;
-
-  if (!lat || !lon) {
-    return res.status(400).json({ error: 'lat and lon query parameters are required' });
-  }
-
-  const userLat = parseFloat(lat);
-  const userLon = parseFloat(lon);
-  const radiusKm = parseFloat(radius);
-
-  if (isNaN(userLat) || isNaN(userLon) || isNaN(radiusKm)) {
-    return res.status(400).json({ error: 'Invalid latitude, longitude, or radius' });
-  }
-
-  try {
-    // 3. Get nearby restaurants (using your Haversine function)
-    const nearbyRestaurants = await getRestaurantsWithinDistance(
-      pool,
-      userLat,
-      userLon,
-      radiusKm,
-      100  // limit
-    );
-
-    if (nearbyRestaurants.length === 0) {
-      return res.status(200).json({
-        status: 200,
-        message: 'No restaurants found nearby',
-        data: []
-      });
-    }
-
-    // 4. Extract user ID from request body (or you can get it from token later)
-    const userId = req.body.id; // or decode from JWT token
-
-    if (!userId) {
-      return res.status(400).json({ error: 'user id required in request body' });
-    }
-
-    // 5. Get personalized recommendations (filtered to nearby only)
-    const pythonRecommendations = await getRecommendations(
-      token,
-      pool,
-      { id: userId },
-      check_all,
-      10 // num recommendations
-    );
-
-    if (pythonRecommendations.status !== 200) {
-      return res.status(pythonRecommendations.status).json(pythonRecommendations);
-    }
-
-    // 6. Filter Python results to only include restaurants that are actually nearby
-    const nearbyIds = new Set(nearbyRestaurants.map(r => r.id));
-    const finalRecommendations = pythonRecommendations.data
-      .filter(rec => nearbyIds.has(rec.id))
-      .map(rec => {
-        const match = nearbyRestaurants.find(r => r.id === rec.id);
-        return {
-          ...rec,
-          distance_km: match?.distance_km?.toFixed(2),
-          distance_miles: match?.distance_miles
-        };
-      });
-
-    res.status(200).json({
-      status: 200,
-      user_location: { lat: userLat, lon: userLon },
-      radius_km: radiusKm,
-      total_nearby: nearbyRestaurants.length,
-      recommendations: finalRecommendations
-    });
-
-  } catch (error) {
-    console.error('Recommendation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+app.post('/getrecommendations', async (req, res) => {
+  const { lat, lon } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  const result = await getRecommendations(pool, lat, lon, token, {
+    radiusKm: 20,
+    numRecommendations: 15,
+    check_all: check_all
+  });
+  res.status(result.status).json(result.status === 200 ? result : { error: result.error });
 });
 
 app.post('/logPreference', async (req, res) => {

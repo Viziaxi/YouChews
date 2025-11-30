@@ -247,40 +247,64 @@ export async function getRestaurantsWithinDistance(
   }
 }
 
-export async function getRecommendations(token, pool, data, check_all, numRecommendations = 10) {
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Helper to get __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// New unified recommendation function
+export async function getRecommendations(pool, userLat, userLon, token, {
+  radiusKm = 15,
+  maxCandidates = 200,        // how many nearby restaurants to consider
+  numRecommendations = 10,
+  check_all                     // your existing auth middleware function
+} = {}) {
+
+  // 1. Authenticate user via JWT
+  const auth = await check_all('user', token);
+  if (auth.status !== 200) {
+    return auth;
+  }
+
+  const userId = auth.user?.id || auth.id; // adjust based on what check_all returns
+
+  if (!userId) {
+    return { status: 400, error: 'Unable to identify user from token' };
+  }
+
+  if (userLat == null || userLon == null) {
+    return { status: 400, error: 'Latitude and longitude are required' };
+  }
+
   try {
-
-    const auth = await check_all('user', token);
-    if (auth.status !== 200) {
-      return auth;
-    }
-
-    if (!data?.id) {
-      return { status: 400, error: 'Missing required field: data.id' };
-    }
-
-    const userId = data.id;
-
-    // Verify user exists
-    const userRes = await pool.query(
-      'SELECT user_preferences FROM users WHERE id = $1',
-      [userId]
+    const nearbyRestaurants = await getRestaurantsWithinDistance(
+      pool,
+      userLat,
+      userLon,
+      radiusKm,
+      maxCandidates
     );
 
-    if (userRes.rows.length === 0) {
-      return { status: 404, error: 'User not found' };
+    if (nearbyRestaurants.length === 0) {
+      return {
+        status: 200,
+        data: [],
+        message: 'No restaurants found within the specified radius'
+      };
     }
 
-    // Get all restaurant IDs (or only nearby ones — better for performance)
-    const { rows } = await pool.query('SELECT id FROM restaurants LIMIT 1000');
-    const idList = rows.map(r => r.id);
+    // Extract only the IDs for the recommender
+    const candidateIds = nearbyRestaurants.map(r => r.id);
 
-    // Run Python recommender
+    // 3. Call Python recommender system with only nearby candidates
     const pythonOutput = await new Promise((resolve, reject) => {
       const pythonProcess = spawn('python3', [
         path.join(__dirname, '../recommender-system/src/main.py'),
-        JSON.stringify(idList),
-        userId,
+        JSON.stringify(candidateIds),
+        userId.toString(),
         numRecommendations.toString()
       ]);
 
@@ -294,28 +318,50 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
         if (code === 0) {
           try {
             const parsed = JSON.parse(stdout.trim());
-                    resolve(parsed); // expected: [{id: "abc", score: 0.95}, ...]
-                  } catch (e) {
-                    reject(new Error(`JSON parse error: ${e.message}\nOutput: ${stdout}`));
-                  }
-                } else {
-                  reject(new Error(`Python exited with code ${code}: ${stderr}`));
-                }
-              });
+            resolve(parsed); // expected: [{id: "abc", score: 0.95}, ...}, ...]
+          } catch (e) {
+            reject(new Error(`JSON parse error: ${e.message}\nOutput: ${stdout}`));
+          }
+        } else {
+          reject(new Error(`Python exited with code ${code}: ${stderr}`));
+        }
+      });
 
       pythonProcess.on('error', (err) => {
-        reject(new Error(`Failed to start Python: ${err.message}`));
+        reject(new Error(`Failed to start Python process: ${err.message}`));
       });
     });
 
+    // 4. Enrich recommendations with full restaurant data + distance
+    const enrichedRecommendations = pythonOutput.map(rec => {
+      const restaurant = nearbyRestaurants.find(r => r.id === rec.id);
+      if (restaurant) {
+        return {
+          ...restaurant,
+          recommendation_score: rec.score || null,
+          rank: rec.rank || null
+        };
+      }
+      return null;
+    }).filter(Boolean);
+
     return {
       status: 200,
-      data: pythonOutput
+      data: enrichedRecommendations,
+      metadata: {
+        user_location: { lat: userLat, lon: userLon },
+        search_radius_km: radiusKm,
+        candidates_considered: candidateIds.length,
+        recommendations_returned: enrichedRecommendations.length
+      }
     };
 
   } catch (error) {
-    console.error('getRecommendations error:', error.message);
-    return { status: 500, error: error.message };
+    console.error('getRecommendations error:', error);
+    return {
+      status: 500,
+      error: error.message || 'Internal recommendation error'
+    };
   }
 }
 
