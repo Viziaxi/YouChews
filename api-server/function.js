@@ -180,12 +180,13 @@ export async function adminLogin({ name, password }, pool) {
 }
 
 export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
-    {
-        if (!userLat || !userLon) {
-            throw new Error("Latitude and longitude are required");
-        }
+    if (!userLat || !userLon) {
+        throw new Error("Latitude and longitude are required");
+    }
 
-        const query = `
+    const query = `
+        SELECT id
+        FROM (
             SELECT id,
                    (6371 * acos(
                            cos(radians($1)) *
@@ -196,83 +197,94 @@ export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, rad
                            )) AS distance_km
             FROM restaurants
             WHERE restaurant_info ? 'lat'
-      AND restaurant_info ? 'lon'
-      AND (restaurant_info->>'lat')::float IS NOT NULL
-      AND (restaurant_info->>'lon')::float IS NOT NULL
-            HAVING (6371 * acos(
-                cos(radians($1)) *
-                cos(radians((restaurant_info->>'lat'):: float)) *
-                cos(radians((restaurant_info->>'lon'):: float) - radians($2)) +
-                sin(radians($1)) *
-                sin(radians((restaurant_info->>'lat'):: float))
-                )) <= $3
-            ORDER BY distance_km ASC
-                LIMIT $4;
-        `;
+              AND restaurant_info ? 'lon'
+              AND (restaurant_info->>'lat')::float IS NOT NULL
+              AND (restaurant_info->>'lon')::float IS NOT NULL
+        ) AS distances
+        WHERE distance_km <= $3
+        ORDER BY distance_km ASC
+        LIMIT $4;
+    `;
 
-        try {
-            const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
-            return rows.map(row => row.id); // ← only IDs
-        } catch (error) {
-            console.error("Failed to get nearby restaurant IDs:", error);
-            throw error;
-        }
+    try {
+        const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
+        return rows.map(row => row.id); // ← only IDs
+    } catch (error) {
+        console.error("Failed to get nearby restaurant IDs:", error);
+        throw error;
     }
 }
 
-export async function getRecommendations(token, pool, body, check_all, numRecommendations = 10) {
-  try {
-    // FIX: properly extract the fields from req.body
-    const { lat, lon, id } = body;
+export async function getRecommendations(token, pool, data, check_all, numRecommendations, radiusKm = 10, limit = 50) {
+    try {
+        const check_authorization = await check_all('user', token);
+        if (check_authorization.status !== 200) {
+            return {status: check_authorization.status, error: check_authorization.message};
+        }
 
-    const check_authorization = await check_all('user', token);
-    if (check_authorization.status !== 200) {
-      return { status: check_authorization.status, error: check_authorization.message };
+        if (!data.lon || !data.lat || !data.id) {
+            return {status: 400, error: 'Missing required field'};
+        }
+
+        const restaurant_idList = await getRestaurantIdsWithinDistance(pool, data.lat, data.lon, radiusKm, limit);
+
+        if (restaurant_idList.length === 0) {
+            return {status: 200, message: "No restaurant nearby."}; // no restaurants nearby → empty recommendations
+        }
+
+        const userId = data.id;
+        const res = await pool.query(
+            'SELECT user_preferences FROM users WHERE id = $1',
+            [userId]
+        );
+        if (res.rows.length === 0) {
+            return {status: 404, error: 'User not found'};
+        }
+
+        const runPython = new Promise((resolve, reject) => {
+            const pythonProcess = spawn('python', [
+                '../recommender-system/src/main.py',
+                JSON.stringify(restaurant_idList), //  may not need to be stringify
+                userId,
+                numRecommendations
+            ]);
+
+            let stdoutData = '';
+            let stderrData = '';
+
+            pythonProcess.stdout.on('data', (data) => {
+                stdoutData += data.toString();
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                stderrData += data.toString();
+            });
+
+            pythonProcess.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const result = JSON.parse(stdoutData);
+                        resolve(result);
+                    } catch (parseError) {
+                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+                    }
+                } else {
+                    reject(new Error(`Python process failed: ${stderrData}`));
+                }
+            });
+
+            pythonProcess.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python process: ${error.message}`));
+            });
+        });
+
+        const recommendations = await runPython;
+        return {status: 200, data: recommendations};
+
+    } catch (error) {
+        console.error('Error in getRecommendations:', error);
+        return {status: 500, error: error.message};
     }
-
-    // Now this will work
-    if (lat === undefined || lon === undefined || id === undefined) {
-      return { status: 400, error: 'Missing required fields: lat, lon, or id' };
-    }
-
-    const restaurant_idList = await getRestaurantsWithinDistance(pool, lat, lon, 10, 200);
-
-    const res = await pool.query(
-      'SELECT user_preferences FROM users WHERE id = $1',
-      [id]
-    );
-
-    if (res.rows.length === 0) {
-      return { status: 404, error: 'User not found' };
-    }
-
-    const userPreferences = res.rows[0].user_preferences || [];
-
-    // Call your Python script (or mock for now)
-    // For now just return the nearby restaurants sorted by distance
-    const recommendations = restaurant_idList
-      .slice(0, numRecommendations)
-      .map((r, index) => ({
-        ...r,
-        recommendation_score: 100 - index * 2, // dummy score
-        rank: index + 1
-      }));
-
-    return {
-      status: 200,
-      data: recommendations,
-      metadata: {
-        user_location: { lat, lon },
-        search_radius_km: 10,
-        candidates_considered: restaurant_idList.length,
-        recommendations_returned: recommendations.length
-      }
-    };
-
-  } catch (error) {
-    console.error('Error in getRecommendations:', error);
-    return { status: 500, error: error.message };
-  }
 }
 
 /*
@@ -346,6 +358,7 @@ export async function getRecommendations(token, pool, data,check_all,numRecommen
     }
 }
 */
+
 
 export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {

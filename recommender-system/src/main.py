@@ -30,7 +30,8 @@ def use_testdata(count: int) -> list[int]:
     return contentbasedsystem.find_next(restaurants, userdata, count)
 
 def execute_from_args(connection) -> list[int]:
-    restaurant_ids = pd.read_json(StringIO(sys.argv[1]))
+    restaurant_ids_json = sys.argv[1]
+    restaurant_ids = json.loads(restaurant_ids_json)  # Parse JSON array to Python list
     user_id = int(sys.argv[2])
     item_count = int(sys.argv[3])
 
@@ -40,7 +41,7 @@ def execute_from_args(connection) -> list[int]:
     userdata_columns: list[str]
 
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM restaurants WHERE id = $1", restaurant_ids)
+        cursor.execute("SELECT * FROM restaurants WHERE id = ANY($1::int[])", (restaurant_ids,))
         content_columns = [desc[0] for desc in cursor.description]
         content_rows = cursor.fetchall()
     with connection.cursor() as cursor:
