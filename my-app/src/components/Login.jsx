@@ -16,7 +16,7 @@ export default function Login({ userType = "user" }) {
       title: "Welcome Back",
       endpoint: "/login",
       bgColor: "bg-yellow-100",
-      successRedirect: "/recommender",
+      successRedirect: "/recommendertest",
       registerPath: "/register",
     },
     restaurant: {
@@ -83,6 +83,22 @@ export default function Login({ userType = "user" }) {
           </div>
         </div>
       )}
+
+       <h1
+        className="
+        absolute top-0 left-1/2 -translate-x-1/2
+        text-6xl sm:text-7xl md:text-8xl lg:text-9xl 
+        font-extrabold 
+        tracking-tight 
+        text-transparent 
+        bg-clip-text 
+        bg-gradient-to-r from-purple-500 to-pink-500
+        leading-tight
+        mb-4
+      "
+      >
+        YouChews
+      </h1>
 
       <form
         className="bg-white shadow-xl rounded-xl p-10 w-full max-w-md border-t-4"

@@ -165,6 +165,21 @@ const UploadRestaurantPage: React.FC = () => {
     <div
       className={`min-h-screen flex items-center justify-center bg-blue-100 p-4 relative`}
     >
+      <h1
+        className="
+        absolute top-0 left-1/2 -translate-x-1/2
+        text-6xl sm:text-7xl md:text-8xl lg:text-9xl 
+        font-extrabold 
+        tracking-tight 
+        text-transparent 
+        bg-clip-text 
+        bg-gradient-to-r from-purple-500 to-pink-500
+        leading-tight
+        mb-4
+      "
+      >
+        YouChews
+      </h1>
       <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl border-t-4 border-t-[#3b82f6]">
         <div className="flex justify-center mb-8">
           <img
