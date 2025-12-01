@@ -231,7 +231,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
     }
 
     // Now this will work
-    if (!lat || !lon || !id === undefined) {
+    if (lat === undefined || lon === undefined || id === undefined) {
       return { status: 400, error: 'Missing required fields: lat, lon, or id' };
     }
 

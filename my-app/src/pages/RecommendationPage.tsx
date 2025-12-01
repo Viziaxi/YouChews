@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 // --- Type Definitions ---
@@ -126,13 +126,9 @@ const RecommendationPage: React.FC = () => {
     ide: number
   ) => {
     const payload = {
-      token: Utoken, // This is your string token
-      data: {
-        // This is the 'data' object requested by the backend
-        lat: latit,
-        lon: long,
-        id: idee,
-      },
+      lat: latit,
+      lon: long,
+      id: ide,
     };
     try {
       const response = await axios.post(
@@ -146,11 +142,11 @@ const RecommendationPage: React.FC = () => {
         }
       );
 
-      if (response.data.status === "success" || response.status === 200) {
+      if (response.status === 200 && response.data.status === 200) {
         setRecommendations(response.data.data);
         setMetadata(response.data.metadata);
       } else {
-        setError("Failed to retrieve recommendations from server.");
+        setError(response.data.error || "Failed to retrieve recommendations from server.");
       }
     } catch (err) {
       console.error(err);

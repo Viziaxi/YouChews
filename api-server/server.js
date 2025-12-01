@@ -104,9 +104,11 @@ app.get('/get_queue',async (req,res)=>{
 })
 
 app.post('/getrecommendations', async (req, res) => {
-
-  const token = req.headers.authorization?.split(' ')[1];
-  const result = await getRecommendations( token, pool, req.body, check_all, 10);
+  if (!req.headers.authorization) {
+    return res.status(401).send({ error: 'Authorization header missing' });
+  }
+  const token = req.headers.authorization.split(' ')[1];
+  const result = await getRecommendations(token, pool, req.body, check_all, 10);
   res.status(result.status).json(result.status === 200 ? result : { error: result.error });
 });
 
