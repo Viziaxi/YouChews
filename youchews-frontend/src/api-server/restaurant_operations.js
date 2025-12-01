@@ -18,29 +18,6 @@ async function price_conversion(raw_price) {
     }
 }
 
-async function geocodeAddress(address) {
-    const searchQuery = encodeURIComponent(address + ", United States");
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&countrycodes=us&limit=1`;
-    const response = await fetch(url, {
-        headers: {
-            'User-Agent': 'MyDistanceApp/1.0' // Required by Nominatim policy
-        }
-    });
-
-    const data = await response.json();
-
-    if (data && data.length > 0) {
-        const result = data[0];
-        return {
-            lat: parseFloat(result.lat),
-            lng: parseFloat(result.lon),
-            formattedAddress: result.display_name
-        };
-    } else {
-        throw new Error("Address not found. Try being more specific.");
-    }
-}
-
 async function check_integrity(data , token, check_all) {
     const check_authorization = await check_all('restaurant', token);
     if (check_authorization.status !== 200) {
@@ -70,6 +47,7 @@ async function check_integrity(data , token, check_all) {
     }
     return { status: 200, message: 'Integrity check passed.' };
 }
+
 
 export async function manageQueue({ approved_list = [], denied_list = [] }, token, pool, check_all) {
     const check_authorization = await check_all('admin', token);
@@ -116,46 +94,39 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
     };
 }
 
-export async function uploadRestaurant(data, token, pool, check_all) {
-  try {
-    const check_res = await check_integrity(data, token, check_all);
+export async function uploadRestaurant( data , token, pool, check_all) {
+    const check_res = await check_integrity(data , token, check_all)
     if (check_res.status !== 200) {
-      return check_res;
+        return check_res
     }
-
-    data.price = await price_conversion(data.price);
-
-    const geo = await geocodeAddress(data.address);
-    data.lat = geo.lat;
-    data.lon = geo.lng;
-    data.formatted_address = geo.formattedAddress;
-
-    await pool.query(
-      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
-      [JSON.stringify(data), data.id]
-    );
-
-    return { status: 200, message: 'Successfully inserted to queue' };
-  } catch (error) {
-    console.error('uploadRestaurant error:', error);
-    return { status: 500, error: error.message };
-  }
+    data.price = price_conversion(data.price)
+    try {
+        await pool.query('INSERT INTO queue (restaurant_info,id) VALUES ($1::jsonb)', [JSON.stringify(data),data.id]);
+        return { status: 200, message: 'Successfully inserted to queue' };
+    } catch (error) {
+        return { status: 500, error: error.message };
+    }
 }
 
-export async function view_queue(token, pool, check_all) {
-    const auth = await check_all('admin', token);
-    if (auth.status !== 200) return auth;
-
-    const { rows } = await pool.query('SELECT id, restaurant_info FROM queue ORDER BY created_at DESC LIMIT 20');
+export async function view_queue(token,pool, check_all) {
+    const check_authorization = await check_all('admin', token);
+    if (check_authorization.status !== 200) {
+        return { status: check_authorization.status, error: check_authorization.message };
+    }
+    let queue;
+    try {
+        const result = await pool.query('SELECT * FROM queue LIMIT 10');
+        queue = result.rows;
+    } catch (error) {
+        return { status: 500, error: error.message };
+    }
 
     return {
         status: 200,
-        message: 'Queue retrieved',
-        data: rows.map(r => ({
-            id: r.id,
-            ...r.restaurant_info
-        }))
+        message: 'successfully retrieved queue',
+        data: queue
     };
+
 }
 
 export async function find_restaurant(data ,token,pool, check_all) {

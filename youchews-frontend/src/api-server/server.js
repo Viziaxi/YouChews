@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
+import config from './config.js';
 import { check_all } from './auth_helper.js';
-import cors from 'cors';
 import {
     registerUser,
     loginUser,
@@ -20,8 +20,11 @@ import {
 } from "./restaurant_operations.js";
 
 const pool = new Pool({
-  connectionString: "postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a.oregon-postgres.render.com/youchews_db_xoi5",
-  ssl: { rejectUnauthorized: false }
+    user: config.db.user,
+    host: config.db.host,
+    password: config.db.password,
+    port: config.db.port,
+    database: config.db.database,
 });
 
 pool.connect()
@@ -31,12 +34,6 @@ pool.connect()
 const app = express();
 const PORT = process.env.PORT || 3000;
 app.use(express.json());
-
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
-
 
 app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
@@ -103,11 +100,13 @@ app.get('/get_queue',async (req,res)=>{
     res.status(result.status).send(result);
 })
 
-app.post('/getrecommendations', async (req, res) => {
-
-  const token = req.headers.authorization?.split(' ')[1];
-  const result = await getRecommendations( token, pool, req.body,check_all,10);
-  res.status(result.status).json(result.status === 200 ? result : { error: result.error });
+app.get('/getRecommendation', async (req, res) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    const result = await getRecommendations(token, pool, req.body.res, check_all, 1);
+    res.status(result.status).send(result);
 });
 
 app.post('/logPreference', async (req, res) => {
