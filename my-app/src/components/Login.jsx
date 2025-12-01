@@ -16,14 +16,14 @@ export default function Login({ userType = "user" }) {
       title: "Welcome Back",
       endpoint: "/login",
       bgColor: "bg-yellow-100",
-      successRedirect: "/placeholder",
+      successRedirect: "/recommender",
       registerPath: "/register",
     },
     restaurant: {
       title: "Restaurant Login",
       endpoint: "/restaurant_login",
       bgColor: "bg-blue-100",
-      successRedirect: "/placeholder",
+      successRedirect: "/restaurant_submission",
       registerPath: "/restaurant_register",
     },
     admin: {
