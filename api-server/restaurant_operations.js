@@ -73,7 +73,6 @@ async function check_integrity(data , token, check_all) {
     return { status: 200, message: 'Integrity check passed.' };
 }
 
-
 export async function manageQueue({ approved_list = [], denied_list = [] }, token, pool, check_all) {
     const check_authorization = await check_all('admin', token);
     if (check_authorization.status !== 200) {

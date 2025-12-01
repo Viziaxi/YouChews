@@ -9,7 +9,7 @@ import {
     loginRestaurant,
     adminLogin,
     logPreference,
-    getRecommendations, getRestaurantsWithinDistance
+    getRecommendations
 } from './function.js';
 
 import {
@@ -104,13 +104,9 @@ app.get('/get_queue',async (req,res)=>{
 })
 
 app.post('/getrecommendations', async (req, res) => {
-  const { lat, lon } = req.body;
+
   const token = req.headers.authorization?.split(' ')[1];
-  const result = await getRecommendations(pool, lat, lon, token, {
-    radiusKm: 20,
-    numRecommendations: 15,
-    check_all: check_all
-  });
+  const result = await getRecommendations( token, pool, req.body,check_all,10);
   res.status(result.status).json(result.status === 200 ? result : { error: result.error });
 });
 
