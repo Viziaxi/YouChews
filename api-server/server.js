@@ -1,7 +1,7 @@
 import express from 'express';
 import { Pool } from 'pg';
-import config from './config.js';
 import { check_all } from './auth_helper.js';
+import cors from 'cors';
 import {
     registerUser,
     loginUser,
@@ -11,7 +11,7 @@ import {
     logPreference,
     getRecommendations
 } from './function.js';
-import cors from 'cors';
+
 import {
     manageQueue,
     uploadRestaurant,
@@ -24,7 +24,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-
 pool.connect()
     .then(() => console.log('Connected to PostgreSQL successfully!'))
     .catch((err) => console.error('Database connection error:', err));
@@ -34,11 +33,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 app.use(cors({
-  origin: true,  // allows all origins
+  origin: true,
   credentials: true,
 }));
 
-app.options("*", cors());
 
 app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
@@ -105,13 +103,11 @@ app.get('/get_queue',async (req,res)=>{
     res.status(result.status).send(result);
 })
 
-app.get('/getRecommendation', async (req, res) => {
-    if (!req.headers.authorization) {
-        return res.status(401).send({ error: 'Authorization header missing' });
-    }
-    const token = req.headers.authorization.split(' ')[1];
-    const result = await getRecommendations(token, pool, req.body.res, check_all, 1);
-    res.status(result.status).send(result);
+app.post('/getrecommendations', async (req, res) => {
+
+  const token = req.headers.authorization?.split(' ')[1];
+  const result = await getRecommendations( token, pool, req.body,check_all,10);
+  res.status(result.status).json(result.status === 200 ? result : { error: result.error });
 });
 
 app.post('/logPreference', async (req, res) => {

@@ -63,7 +63,7 @@ export async function loginUser({ name, password }, pool) {
         return {
             status: 200,
             message: 'User login successfully',
-            user: { id: user.id, name: user.name },
+            user: { id: user.id, name: user.name},
             token
         };
     } catch (error) {
@@ -72,13 +72,13 @@ export async function loginUser({ name, password }, pool) {
     }
 }
 
-export async function registerRestaurant({ restaurant_username, password }, pool) {
+export async function registerRestaurant({ name, password }, pool) {
     try {
-        if (!restaurant_username || !password) {
+        if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const check = await pool.query('SELECT restaurant_username FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
+        const check = await pool.query('SELECT name FROM restaurants WHERE name=$1', [name]);
         if (check.rows.length > 0) {
             return { status: 400, error: 'Username already exists' };
         }
@@ -86,13 +86,13 @@ export async function registerRestaurant({ restaurant_username, password }, pool
         const salt = 10;
         const hashed_password = await bcrypt.hash(password, salt);
         const result = await pool.query(
-            'INSERT INTO restaurants (restaurant_username, password) VALUES ($1, $2) RETURNING *',
-            [restaurant_username, hashed_password]
+            'INSERT INTO restaurants (name, password) VALUES ($1, $2) RETURNING *',
+            [name, hashed_password]
         );
 
         const restaurant = result.rows[0];
         const token = jwt.sign(
-            { id: restaurant.id, name: restaurant.restaurant_username, role: 'restaurant' },
+            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
@@ -100,7 +100,7 @@ export async function registerRestaurant({ restaurant_username, password }, pool
         return {
             status: 200,
             message: 'Restaurant registered successfully',
-            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
+            user: { id: restaurant.id, name: restaurant.name },
             token
         };
     } catch (error) {
@@ -109,13 +109,13 @@ export async function registerRestaurant({ restaurant_username, password }, pool
     }
 }
 
-export async function loginRestaurant({ restaurant_username, password }, pool) {
+export async function loginRestaurant({ name, password }, pool) {
     try {
-        if (!restaurant_username || !password) {
+        if (!name || !password) {
             return { status: 400, error: 'Missing required field' };
         }
 
-        const restaurants = await pool.query('SELECT id, restaurant_username, password FROM restaurants WHERE restaurant_username=$1', [restaurant_username]);
+        const restaurants = await pool.query('SELECT id, name, password FROM restaurants WHERE name=$1', [name]);
         if (restaurants.rows.length < 1) {
             return { status: 400, error: 'Username Not Found' };
         }
@@ -127,15 +127,15 @@ export async function loginRestaurant({ restaurant_username, password }, pool) {
         }
 
         const token = jwt.sign(
-            { id: restaurant.id, restaurant_username: restaurant.restaurant_username, role: 'restaurant' },
+            { id: restaurant.id, name: restaurant.name, role: 'restaurant' },
             config.jwt.secret,
             { expiresIn: '5h' }
         );
 
         return {
             status: 200,
-            message: 'restaruant login successfully',
-            user: { id: restaurant.id, restaurant_username: restaurant.restaurant_username },
+            message: 'restaurant login successfully',
+            user: { id: restaurant.id, name: restaurant.name },
             token
         };
     } catch (error) {
@@ -179,11 +179,120 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
+export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
+    {
+        if (!userLat || !userLon) {
+            throw new Error("Latitude and longitude are required");
+        }
 
-async function prepareDataForPython(data) {
-    return JSON.stringify(data).replace(/"/g, '\\"');
+        const query = `
+            SELECT id,
+                   (6371 * acos(
+                           cos(radians($1)) *
+                           cos(radians((restaurant_info ->>'lat'):: float)) *
+                           cos(radians((restaurant_info ->>'lon'):: float) - radians($2)) +
+                           sin(radians($1)) *
+                           sin(radians((restaurant_info ->>'lat'):: float))
+                           )) AS distance_km
+            FROM restaurants
+            WHERE restaurant_info ? 'lat'
+      AND restaurant_info ? 'lon'
+      AND (restaurant_info->>'lat')::float IS NOT NULL
+      AND (restaurant_info->>'lon')::float IS NOT NULL
+            HAVING (6371 * acos(
+                cos(radians($1)) *
+                cos(radians((restaurant_info->>'lat'):: float)) *
+                cos(radians((restaurant_info->>'lon'):: float) - radians($2)) +
+                sin(radians($1)) *
+                sin(radians((restaurant_info->>'lat'):: float))
+                )) <= $3
+            ORDER BY distance_km ASC
+                LIMIT $4;
+        `;
+
+        try {
+            const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
+            return rows.map(row => row.id); // ← only IDs
+        } catch (error) {
+            console.error("Failed to get nearby restaurant IDs:", error);
+            throw error;
+        }
+    }
 }
 
+export async function getRecommendations(token, pool, data, check_all, numRecommendations, radiusKm = 10, limit = 50) {
+    try {
+        const check_authorization = await check_all('user', token);
+        if (check_authorization.status !== 200) {
+            return {status: check_authorization.status, error: check_authorization.message};
+        }
+
+        if (!data.lon || !data.lat || !data.id) {
+            return {status: 400, error: 'Missing required field'};
+        }
+
+        const restaurant_idList = getRestaurantIdsWithinDistance(pool, data.lat, data.lon, radiusKm, limit);
+
+        if (restaurant_idList.length === 0) {
+            return {status: 200, message: "No restaurant nearby."}; // no restaurants nearby → empty recommendations
+        }
+
+        const userId = data.id;
+        const res = await pool.query(
+            'SELECT user_preferences FROM users WHERE id = $1',
+            [userId]
+        );
+        if (res.rows.length === 0) {
+            return {status: 404, error: 'User not found'};
+        }
+
+        const runPython = new Promise((resolve, reject) => {
+            const pythonProcess = spawn('python', [
+                '../recommender-system/src/main.py',
+                JSON.stringify(restaurant_idList), //  may not need to be stringify
+                userId,
+                numRecommendations
+            ]);
+
+            let stdoutData = '';
+            let stderrData = '';
+
+            pythonProcess.stdout.on('data', (data) => {
+                stdoutData += data.toString();
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                stderrData += data.toString();
+            });
+
+            pythonProcess.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const result = JSON.parse(stdoutData);
+                        resolve(result);
+                    } catch (parseError) {
+                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+                    }
+                } else {
+                    reject(new Error(`Python process failed: ${stderrData}`));
+                }
+            });
+
+            pythonProcess.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python process: ${error.message}`));
+            });
+        });
+
+        const recommendations = await runPython;
+        return {status: 200, data: recommendations};
+
+    } catch (error) {
+        console.error('Error in getRecommendations:', error);
+        return {status: 500, error: error.message};
+    }
+}
+
+/*
 export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
     try {
         const check_authorization = await check_all('user', token);
@@ -203,27 +312,17 @@ export async function getRecommendations(token, pool, data,check_all,numRecommen
             return { status: 404, error: 'User not found' };
         }
         const contentRes = await pool.query(
-            `SELECT id,
-                    restaurant_info->>'flavors' AS flavors,
-                    restaurant_info->>'menu' AS menu,
-                    restaurant_info->>'name' AS name,
-                    restaurant_info->>'price' AS price,
-                    restaurant_info->>'service_style' AS service_style
-             FROM restaurants`
+            `SELECT id FROM restaurants;`
         );
 
-        const contentData = contentRes.rows;
-        const userData = res.rows[0].user_preferences;
-
-        const contentString = await prepareDataForPython(contentData);
-        const userDataString = await prepareDataForPython(userData);
+        const idList = contentRes.rows.map(r => r.id);
 
         const runPython = new Promise((resolve, reject) => {
             const pythonProcess = spawn('python', [
                 '../recommender-system/src/main.py',
-                contentString,
-                userDataString,
-                numRecommendations.toString()
+                idList,
+                userId,
+                numRecommendations
             ]);
 
             let stdoutData = '';
@@ -263,6 +362,8 @@ export async function getRecommendations(token, pool, data,check_all,numRecommen
         return { status: 500, error: error.message };
     }
 }
+*/
+
 
 export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {
@@ -334,3 +435,4 @@ export async function logPreference(data,token,pool,check_all) {
         return { status: 500, error: error.message };
     }
 }
+
