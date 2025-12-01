@@ -229,7 +229,16 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
         const restaurant_idList = await getRestaurantIdsWithinDistance(pool, data.lat, data.lon, radiusKm, limit);
 
         if (restaurant_idList.length === 0) {
-            return {status: 200, message: "No restaurant nearby."}; // no restaurants nearby → empty recommendations
+            return {
+                status: 200,
+                data: [],
+                metadata: {
+                    user_location: { lat: data.lat, lng: data.lon },
+                    search_radius_km: radiusKm,
+                    candidates_considered: 0,
+                    recommendations_returned: 0
+                }
+            };
         }
 
         const userId = data.id;
@@ -278,8 +287,91 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
             });
         });
 
-        const recommendations = await runPython;
-        return {status: 200, data: recommendations};
+        const recommendedIds = await runPython;
+        
+        if (!Array.isArray(recommendedIds) || recommendedIds.length === 0) {
+            return {status: 200, data: [], metadata: {
+                user_location: { lat: data.lat, lng: data.lon },
+                search_radius_km: radiusKm,
+                candidates_considered: restaurant_idList.length,
+                recommendations_returned: 0
+            }};
+        }
+
+        // Fetch full restaurant data for recommended IDs
+        const restaurantQuery = `
+            SELECT 
+                id,
+                restaurant_info->>'name' AS name,
+                restaurant_info->>'address' AS address,
+                restaurant_info->>'formatted_address' AS formatted_address,
+                restaurant_info->>'cuisine' AS cuisine,
+                (restaurant_info->>'price_tier')::int AS price_tier,
+                (restaurant_info->>'lat')::float AS lat,
+                (restaurant_info->>'lon')::float AS lon,
+                (6371 * acos(
+                    cos(radians($1)) *
+                    cos(radians((restaurant_info->>'lat')::float)) *
+                    cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
+                    sin(radians($1)) *
+                    sin(radians((restaurant_info->>'lat')::float))
+                )) AS distance_km
+            FROM restaurants
+            WHERE id = ANY($3::int[])
+            ORDER BY array_position($3::int[], id);
+        `;
+
+        const restaurantResult = await pool.query(restaurantQuery, [
+            data.lat,
+            data.lon,
+            recommendedIds
+        ]);
+
+        // Format recommendations with all required fields
+        const formattedRecommendations = restaurantResult.rows.map((row, index) => {
+            const distanceKm = parseFloat(row.distance_km) || 0;
+            const distanceMiles = distanceKm * 0.621371; // Convert km to miles
+            
+            // Parse cuisine if it's a string, otherwise use as-is
+            let cuisine = row.cuisine;
+            if (typeof cuisine === 'string') {
+                try {
+                    cuisine = JSON.parse(cuisine);
+                } catch (e) {
+                    // If not JSON, treat as single string and convert to array
+                    cuisine = [cuisine];
+                }
+            }
+            if (!Array.isArray(cuisine)) {
+                cuisine = cuisine ? [cuisine] : [];
+            }
+
+            return {
+                id: row.id.toString(),
+                name: row.name || 'Unknown Restaurant',
+                address: row.address || '',
+                formatted_address: row.formatted_address || row.address || '',
+                cuisine: cuisine,
+                price_tier: row.price_tier || 1,
+                lat: parseFloat(row.lat) || 0,
+                lon: parseFloat(row.lon) || 0,
+                distance_km: distanceKm,
+                distance_miles: distanceMiles,
+                recommendation_score: 8.5 - (index * 0.1), // Mock score, decreasing by rank
+                rank: index + 1
+            };
+        });
+
+        return {
+            status: 200,
+            data: formattedRecommendations,
+            metadata: {
+                user_location: { lat: data.lat, lng: data.lon },
+                search_radius_km: radiusKm,
+                candidates_considered: restaurant_idList.length,
+                recommendations_returned: formattedRecommendations.length
+            }
+        };
 
     } catch (error) {
         console.error('Error in getRecommendations:', error);
@@ -287,77 +379,6 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
     }
 }
 
-/*
-export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
-    try {
-        const check_authorization = await check_all('user', token);
-        if (check_authorization.status !== 200) {
-            return { status: check_authorization.status, error: check_authorization.message };
-        }
-
-        if (!data || !data.id) {
-            return { status: 400, error: 'Missing required field: data.id' };
-        }
-        const userId = data.id;
-        const res = await pool.query(
-            'SELECT user_preferences FROM users WHERE id = $1',
-            [userId]
-        );
-        if (res.rows.length === 0) {
-            return { status: 404, error: 'User not found' };
-        }
-        const contentRes = await pool.query(
-            `SELECT id FROM restaurants;`
-        );
-
-        const idList = contentRes.rows.map(r => r.id);
-
-        const runPython = new Promise((resolve, reject) => {
-            const pythonProcess = spawn('python', [
-                '../recommender-system/src/main.py',
-                idList,
-                userId,
-                numRecommendations
-            ]);
-
-            let stdoutData = '';
-            let stderrData = '';
-
-            pythonProcess.stdout.on('data', (data) => {
-                stdoutData += data.toString();
-            });
-
-            pythonProcess.stderr.on('data', (data) => {
-                stderrData += data.toString();
-            });
-
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdoutData);
-                        resolve(result);
-                    } catch (parseError) {
-                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
-                    }
-                } else {
-                    reject(new Error(`Python process failed: ${stderrData}`));
-                }
-            });
-
-            pythonProcess.on('error', (error) => {
-                reject(new Error(`Failed to spawn Python process: ${error.message}`));
-            });
-        });
-
-        const recommendations = await runPython;
-        return { status: 200, data: recommendations };
-
-    } catch (error) {
-        console.error('Error in getRecommendations:', error);
-        return { status: 500, error: error.message };
-    }
-}
-*/
 
 
 export async function logPreference(data,token,pool,check_all) {

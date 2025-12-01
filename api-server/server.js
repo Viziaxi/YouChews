@@ -94,13 +94,18 @@ app.get('/find_restaurant', async (req, res) => {
     res.status(result.status).send(result);
 })
 
-app.get('/get_queue',async (req,res)=>{
-    if (!req.headers.authorization) {
-        return res.status(401).send({ error: 'Authorization header missing' });
+app.get('/get_queue', async (req, res) => {
+    try {
+        if (!req.headers.authorization) {
+            return res.status(401).send({ error: 'Authorization header missing' });
+        }
+        const token = req.headers.authorization.split(' ')[1];
+        const result = await view_queue(token, pool, check_all);
+        res.status(result.status).send(result);
+    } catch (error) {
+        console.error('get_queue endpoint error:', error);
+        res.status(500).send({ error: 'Internal server error' });
     }
-    const token = req.headers.authorization.split(' ')[1];
-    const result = await view_queue(token, pool, check_all);
-    res.status(result.status).send(result);
 })
 
 app.post('/getrecommendations', async (req, res) => {

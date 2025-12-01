@@ -143,19 +143,27 @@ export async function uploadRestaurant(data, token, pool, check_all) {
 }
 
 export async function view_queue(token, pool, check_all) {
-    const auth = await check_all('admin', token);
-    if (auth.status !== 200) return auth;
+    try {
+        const auth = await check_all('admin', token);
+        if (auth.status !== 200) return auth;
 
-    const { rows } = await pool.query('SELECT id, restaurant_info FROM queue ORDER BY created_at DESC LIMIT 20');
+        const { rows } = await pool.query('SELECT id, restaurant_info FROM queue ORDER BY time_created DESC LIMIT 20');
 
-    return {
-        status: 200,
-        message: 'Queue retrieved',
-        data: rows.map(r => ({
-            id: r.id,
-            ...r.restaurant_info
-        }))
-    };
+        return {
+            status: 200,
+            message: 'Queue retrieved',
+            data: rows.map(r => ({
+                id: r.id,
+                ...r.restaurant_info
+            }))
+        };
+    } catch (error) {
+        console.error('view_queue error:', error);
+        return {
+            status: 500,
+            error: error.message || 'Failed to retrieve queue'
+        };
+    }
 }
 
 export async function find_restaurant(data ,token,pool, check_all) {
