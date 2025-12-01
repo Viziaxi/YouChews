@@ -17,6 +17,7 @@ import {
     uploadRestaurant,
     view_queue,
     find_restaurant,
+    view_all_restaurants,
 } from "./restaurant_operations.js";
 
 const pool = new Pool({
@@ -100,6 +101,15 @@ app.get('/get_queue',async (req,res)=>{
     }
     const token = req.headers.authorization.split(' ')[1];
     const result = await view_queue(token, pool, check_all);
+    res.status(result.status).send(result);
+})
+
+app.get('/get_all_restaurants', async (req, res) => {
+    if (!req.headers.authorization) {
+        return res.status(401).send({ error: 'Authorization header missing' });
+    }
+    const token = req.headers.authorization.split(' ')[1];
+    const result = await view_all_restaurants(token, pool, check_all);
     res.status(result.status).send(result);
 })
 

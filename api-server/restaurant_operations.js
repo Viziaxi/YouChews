@@ -86,14 +86,28 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
             continue
         }
         try {
+            const restaurantInfo = row.restaurant_info;
+            const restaurantName = restaurantInfo?.name || `restaurant_${itemId}`;
+            
+            // Check if restaurant with this name already exists
+            const checkExisting = await pool.query('SELECT id FROM restaurants WHERE name = $1', [restaurantName]);
+            if (checkExisting.rows.length > 0) {
+                console.warn(`Restaurant with name "${restaurantName}" already exists, skipping`);
+                await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
+                continue;
+            }
+
+            // Generate a default password using the restaurant ID
+            const defaultPassword = `temp_${itemId}_${Date.now()}`;
+            
             await pool.query(
-                'INSERT INTO restaurants (restaurant_info) VALUES ($1)',
-                [row.restaurant_info]
+                'INSERT INTO restaurants (name, password, restaurant_info) VALUES ($1, $2, $3)',
+                [restaurantName, defaultPassword, restaurantInfo]
             );
             await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
         } catch (error) {
             console.error(`DB error for ID ${itemId}:`, error);
-            return { status: 500, error: `Failed to process ID: ${itemId}` };
+            return { status: 500, error: `Failed to process ID: ${itemId}: ${error.message}` };
         }
     }
 
@@ -179,4 +193,23 @@ export async function find_restaurant(data ,token,pool, check_all) {
         return {status : 200,message:'Successfully found a restaurant', data: restaurants_res.rows[0]};
     }
     return {status: 400, message: 'Failed to retrieve restaurants'};
+}
+
+export async function view_all_restaurants(token, pool, check_all) {
+    const auth = await check_all('admin', token);
+    if (auth.status !== 200) return auth;
+
+    const { rows } = await pool.query(
+        'SELECT id, name, restaurant_info FROM restaurants ORDER BY id DESC LIMIT 100'
+    );
+
+    return {
+        status: 200,
+        message: 'Restaurants retrieved',
+        data: rows.map(r => ({
+            id: r.id,
+            name: r.name,
+            ...r.restaurant_info
+        }))
+    };
 }
