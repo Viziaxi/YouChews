@@ -2,6 +2,9 @@ import { Route, Routes } from 'react-router-dom';
 import Login from './components/Login.jsx';
 import Register from './components/register.jsx';
 import Placeholder from "./pages/test_page.jsx";
+import UploadRestaurant from "./pages/UploadRestaurant.tsx";
+import RecommendationPage from "./pages/RecommendationPage.js";
+import AdminQueuePage from "./pages/AdminQueuePage.tsx";
 
 function App() {
   return (
@@ -11,6 +14,10 @@ function App() {
 
         <Route path="/register" element={<Register userType="user" />} />
         <Route path="/restaurant_register" element={<Register userType="restaurant" />} />
+
+        <Route path="/RecommendationPage" element={<RecommendationPage/>} />
+        <Route path="/UploadRestaurant" element={<UploadRestaurant />} />
+        <Route path="/AdminQueuePage" element={<AdminQueuePage />} />
 
         <Route path="/login" element={<Login userType="user" />} />
         <Route path="/restaurant_login" element={<Login userType="restaurant" />} />
