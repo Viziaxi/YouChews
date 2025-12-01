@@ -66,6 +66,7 @@ const UploadRestaurantPage: React.FC = () => {
     }
 
     const user = JSON.parse(storedUser);
+    const scoreAsInteger = parseInt(user.id, 10);
     setIdee(user.id);
   }, []);
 

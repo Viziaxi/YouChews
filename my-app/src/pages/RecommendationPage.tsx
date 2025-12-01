@@ -3,6 +3,13 @@ import axios from "axios";
 
 // --- Type Definitions ---
 
+//API-BASE-URL
+
+interface LocationData {
+  userLat: number;
+  userLon: number;
+}
+
 interface RecommendationData {
   id: string;
   name: string;
@@ -43,11 +50,14 @@ const RecommendationPage: React.FC = () => {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [idee, setIdee] = useState<number>(0);
+  const [UsToken, setUsToken] = useState<string | null>(null);
 
   // --- 1. Initial Load: Check Token & Get Location ---
   useEffect(() => {
     const initialize = async () => {
       const token = localStorage.getItem("token");
+      const storedUser = localStorage.getItem("user");
 
       if (!token) {
         setError("Unauthorized: No valid token found.");
@@ -55,11 +65,27 @@ const RecommendationPage: React.FC = () => {
         return; // Redirect to login logic would go here
       }
 
-      if (!navigator.geolocation) {
+      /*if (!navigator.geolocation) {
         setError("Geolocation is not supported by your browser.");
         setLoading(false);
         return;
+      }*/
+
+      //setting Token
+      setUsToken(token);
+
+      //User ID validation
+      if (!storedUser) {
+        console.error("No user stored in localStorage.");
+        setError("Authorization token not found. Please log in.");
+        setLoading(false);
+        return;
       }
+
+      const user = JSON.parse(storedUser);
+
+      const ideee = parseInt(user.id, 10);
+      setIdee(ideee);
 
       // Example: Times Square, New York
       const mockLat = 40.758;
@@ -68,7 +94,7 @@ const RecommendationPage: React.FC = () => {
       console.log("Using Mock Location:", mockLat, mockLong);
 
       // Call fetch directly, skipping navigator.geolocation
-      fetchRecommendations(token, mockLat, mockLong);
+      fetchRecommendations(token, mockLat, mockLong, ideee);
 
       // --- CHANGE END ---
 
@@ -94,17 +120,27 @@ const RecommendationPage: React.FC = () => {
 
   // --- 2. Fetch Recommendations ---
   const fetchRecommendations = async (
-    token: string,
+    Utoken: string,
     latit: number,
-    long: number
+    long: number,
+    ide: number
   ) => {
+    const payload = {
+      token: Utoken, // This is your string token
+      data: {
+        // This is the 'data' object requested by the backend
+        lat: latit,
+        lon: long,
+        id: idee,
+      },
+    };
     try {
-      const response = await axios.post<ApiResponse>(
-        "/api/getrecommendations", // Replace with your actual endpoint
-        { lat: latit, lon: long },
+      const response = await axios.post(
+        "https://youchews.onrender.com/getrecommendations", // Replace with your actual endpoint
+        payload,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${Utoken}`,
             "Content-Type": "application/json",
           },
         }
