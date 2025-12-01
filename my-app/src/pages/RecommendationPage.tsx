@@ -131,7 +131,7 @@ const RecommendationPage: React.FC = () => {
         // This is the 'data' object requested by the backend
         lat: latit,
         lon: long,
-        id: idee,
+        id: ide,
       },
     };
     try {
