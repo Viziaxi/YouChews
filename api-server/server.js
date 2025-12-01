@@ -86,7 +86,7 @@ app.post('/upload_restaurant', async (req, res) => {
     res.status(result.status).send(result);
 });
 
-app.get('/find_restaurant', async (req, res) => {
+app.post('/find_restaurant', async (req, res) => {
     if (!req.headers.authorization) {
         return res.status(401).send({ error: 'Authorization header missing' });
     }
