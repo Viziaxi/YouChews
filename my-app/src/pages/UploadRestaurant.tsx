@@ -166,6 +166,13 @@ const UploadRestaurantPage: React.FC = () => {
       className={`min-h-screen flex items-center justify-center bg-blue-100 p-4 relative`}
     >
       <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl border-t-4 border-t-[#3b82f6]">
+        <div className="flex justify-center mb-8">
+          <img
+            src="/logo.png"
+            alt="Login"
+            className="w-32 h-32  object-cover  border-4 border-white"
+          />
+        </div>
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
           Upload New Restaurant
         </h1>

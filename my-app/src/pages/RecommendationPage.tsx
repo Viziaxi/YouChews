@@ -5,9 +5,13 @@ import axios from "axios";
 
 //API-BASE-URL
 
-interface LocationData {
-  userLat: number;
-  userLon: number;
+interface UploadState {
+  token: string;
+  data: {
+    lat: number;
+    lon: number;
+    id: number;
+  };
 }
 
 interface RecommendationData {
@@ -125,12 +129,12 @@ const RecommendationPage: React.FC = () => {
     long: number,
     ide: number
   ) => {
-    const payload = {
+    const payload: UploadState = {
       token: Utoken, // This is your string token
       data: {
         // This is the 'data' object requested by the backend
-        lat: latit,
         lon: long,
+        lat: latit,
         id: ide,
       },
     };
@@ -173,7 +177,7 @@ const RecommendationPage: React.FC = () => {
 
     try {
       await axios.post(
-        "/api/logPreference",
+        "https://youchews.onrender.com/logPreference",
         {
           id: currentItem.id,
           value: preferenceValue, // 1 for Like, -1 for Dislike
@@ -198,7 +202,7 @@ const RecommendationPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+      <div className="flex items-center justify-center min-h-screen bg-yellow-100">
         <div className="text-xl font-semibold text-gray-600 animate-pulse">
           Finding the best spots for you...
         </div>
@@ -220,8 +224,15 @@ const RecommendationPage: React.FC = () => {
   // Check if we have run out of recommendations
   if (currentIndex >= recommendations.length) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center p-8 bg-white rounded-xl shadow-lg">
+      <div className="flex items-center justify-center min-h-screen bg-yellow-100">
+        <div className="text-center p-8 bg-white rounded-xl shadow-lg border-t-4 border-t-[#ef4444]">
+          <div className="flex justify-center mb-8">
+            <img
+              src="/logo.png"
+              alt="Login"
+              className="w-32 h-32  object-cover  border-4 border-white"
+            />
+          </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
             That's all for now!
           </h2>
@@ -243,7 +254,7 @@ const RecommendationPage: React.FC = () => {
 
   // --- Main UI ---
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-yellow-100 flex flex-col items-center justify-center p-4">
       {/* Header / Metadata Info (Optional) */}
       {metadata && (
         <div className="mb-4 text-xs text-gray-400">
@@ -253,7 +264,7 @@ const RecommendationPage: React.FC = () => {
       )}
 
       {/* Card Container */}
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-t-[#ef4444]">
         {/* Image Placeholder (or Map view) */}
         <div className="h-48 bg-blue-100 flex items-center justify-center text-blue-300">
           {/* You could put a dynamic Google Map image here using the lat/long */}
