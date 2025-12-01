@@ -19,10 +19,8 @@ async function price_conversion(raw_price) {
 }
 
 async function geocodeAddress(address) {
-    // Restrict to US for better accuracy
     const searchQuery = encodeURIComponent(address + ", United States");
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&countrycodes=us&limit=1`;
-
     const response = await fetch(url, {
         headers: {
             'User-Agent': 'MyDistanceApp/1.0' // Required by Nominatim policy
@@ -118,22 +116,30 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
     };
 }
 
-export async function uploadRestaurant( data , token, pool, check_all) {
-    const check_res = await check_integrity(data , token, check_all)
+export async function uploadRestaurant(data, token, pool, check_all) {
+  try {
+    const check_res = await check_integrity(data, token, check_all);
     if (check_res.status !== 200) {
-        return check_res
+      return check_res;
     }
-    data.price = await price_conversion(data.price)
+
+    data.price = await price_conversion(data.price);
+
     const geo = await geocodeAddress(data.address);
     data.lat = geo.lat;
     data.lon = geo.lng;
-    data.formatted_address = geo.formattedAddress
-    try {
-        await pool.query('INSERT INTO queue (restaurant_info,id) VALUES ($1::jsonb)', [JSON.stringify(data),data.id]);
-        return { status: 200, message: 'Successfully inserted to queue' };
-    } catch (error) {
-        return { status: 500, error: error.message };
-    }
+    data.formatted_address = geo.formattedAddress;
+
+    await pool.query(
+      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
+      [JSON.stringify(data), data.id]
+    );
+
+    return { status: 200, message: 'Successfully inserted to queue' };
+  } catch (error) {
+    console.error('uploadRestaurant error:', error);
+    return { status: 500, error: error.message };
+  }
 }
 
 export async function view_queue(token, pool, check_all) {
