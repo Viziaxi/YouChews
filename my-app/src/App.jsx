@@ -2,7 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import Login from './components/Login.jsx';
 import Register from './components/register.jsx';
 import Placeholder from "./pages/test_page.jsx";
-import UploadRestaurant from "./pages/UploadRestaurant.tsx";
+import RestaurantDashboard from "./pages/RestaurantDashboard.tsx";
 import RecommendationPage from "./pages/RecommendationPage.js";
 import AdminQueuePage from "./pages/AdminQueuePage.tsx";
 
@@ -16,7 +16,7 @@ function App() {
         <Route path="/restaurant_register" element={<Register userType="restaurant" />} />
 
         <Route path="/RecommendationPage" element={<RecommendationPage/>} />
-        <Route path="/UploadRestaurant" element={<UploadRestaurant />} />
+        <Route path="/RestaurantDashboard" element={<RestaurantDashboard />} />
         <Route path="/AdminQueuePage" element={<AdminQueuePage />} />
 
         <Route path="/login" element={<Login userType="user" />} />
