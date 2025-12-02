@@ -7,10 +7,9 @@ interface RestaurantFormData {
   name: string;
   id: number;
   address: string;
-  cuisine: string;
-  service_style: string;
+  categories: string;
+  service_type: string;
   menu: string;
-  price: number;
   flavors: string;
 }
 
@@ -29,10 +28,9 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
     name: initialData?.name || "",
     id: initialData?.id || restaurantId || 0,
     address: initialData?.address || "",
-    cuisine: initialData?.cuisine || "",
-    service_style: initialData?.service_style || "",
+    categories: (initialData as any)?.categories || "",
+    service_type: (initialData as any)?.service_type || "",
     menu: initialData?.menu || "",
-    price: initialData?.price || 0,
     flavors: initialData?.flavors || "",
   });
 
@@ -44,7 +42,7 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "price" || name === "id" ? parseFloat(value) || 0 : value,
+      [name]: name === "id" ? parseFloat(value) || 0 : value,
     }));
   };
 
@@ -68,9 +66,8 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
     };
 
     // Validate required fields
-    if (!submitData.name || !submitData.address || !submitData.cuisine || 
-        !submitData.service_style || !submitData.menu || !submitData.flavors || 
-        submitData.price <= 0) {
+    if (!submitData.name || !submitData.address || !submitData.categories || 
+        !submitData.service_type || !submitData.menu || !submitData.flavors) {
       setError("Please fill in all required fields.");
       setLoading(false);
       return;
@@ -161,14 +158,14 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
             </div>
 
             <div>
-              <label htmlFor="cuisine" className="block text-sm font-medium text-gray-700 mb-2">
-                Cuisine Type *
+              <label htmlFor="categories" className="block text-sm font-medium text-gray-700 mb-2">
+                Categories *
               </label>
               <input
                 type="text"
-                id="cuisine"
-                name="cuisine"
-                value={formData.cuisine}
+                id="categories"
+                name="categories"
+                value={formData.categories}
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -177,14 +174,14 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
             </div>
 
             <div>
-              <label htmlFor="service_style" className="block text-sm font-medium text-gray-700 mb-2">
-                Service Style *
+              <label htmlFor="service_type" className="block text-sm font-medium text-gray-700 mb-2">
+                Service Type *
               </label>
               <input
                 type="text"
-                id="service_style"
-                name="service_style"
-                value={formData.service_style}
+                id="service_type"
+                name="service_type"
+                value={formData.service_type}
                 onChange={handleChange}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -206,27 +203,6 @@ const UploadRestaurant: React.FC<UploadRestaurantProps> = ({
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Describe your menu items and specialties"
               />
-            </div>
-
-            <div>
-              <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-2">
-                Average Price per Person ($) *
-              </label>
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={formData.price || ""}
-                onChange={handleChange}
-                required
-                min="1"
-                step="0.01"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., 25.00"
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                This will be converted to a price tier ($, $$, $$$, $$$$)
-              </p>
             </div>
 
             <div>

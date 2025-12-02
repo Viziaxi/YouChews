@@ -20,7 +20,7 @@ def prepare_strings(x):
 
 def create_vector_string(data) -> str:
     result = ""
-    for col in ["flavors", "menu", "name", "price", "service_style"]:
+    for col in ["flavors", "menu", "name", "service_style"]:
         if len(result) > 0:
             result += ' '
         if isinstance(data[col], str):
@@ -35,7 +35,7 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, num: int = 1) -> li
     userdata["like_level"] = userdata["like_level"].astype(float)
     userdata.sort_values("like_level", ascending=False, inplace=True, ignore_index=True)
     
-    for col in ("flavors", "menu", "name", "price", "service_style", "cuisine"):
+    for col in ("flavors", "menu", "name", "service_style", "cuisine"):
         content[col] = content[col].apply(prepare_strings)
     
     eval_features(content, "flavors", "menu")

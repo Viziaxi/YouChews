@@ -15,8 +15,7 @@ interface RecommendationData {
   name: string;
   address: string;
   formatted_address: string;
-  cuisine: string[]; // Assuming array, adjust if string
-  price_tier: number; // e.g., 1, 2, 3, 4
+  categories: string[]; // Assuming array, adjust if string
   lat: number;
   lon: number;
   distance_km: number;
@@ -185,11 +184,6 @@ const RecommendationPage: React.FC = () => {
     }
   };
 
-  // --- Helper to render Price Tier ---
-  const renderPrice = (tier: number) => {
-    return "$".repeat(tier) || "$"; // Default to $ if 0/null
-  };
-
   // --- Render States ---
 
   if (loading) {
@@ -293,17 +287,11 @@ const RecommendationPage: React.FC = () => {
           {/* Details Grid */}
           <div className="grid grid-cols-2 gap-4 text-sm mb-6">
             <div>
-              <p className="text-gray-400">Cuisine</p>
+              <p className="text-gray-400">Categories</p>
               <p className="font-medium text-gray-700">
-                {Array.isArray(currentRec.cuisine)
-                  ? currentRec.cuisine.join(", ")
-                  : currentRec.cuisine}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-400">Price</p>
-              <p className="font-medium text-green-600">
-                {renderPrice(currentRec.price_tier)}
+                {Array.isArray(currentRec.categories)
+                  ? currentRec.categories.join(", ")
+                  : currentRec.categories}
               </p>
             </div>
             <div>
