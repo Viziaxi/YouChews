@@ -1,23 +1,3 @@
-async function price_conversion(raw_price) {
-    if (!raw_price || typeof raw_price !== 'number' || raw_price <= 0) {
-        console.error('Invalid price passed or price is 0 (price_conversion).');
-        return '';
-    }
-
-    if (raw_price <= 15) {
-        return '$';
-    }
-    else if (raw_price <= 30) {
-        return '$$';
-    }
-    else if (raw_price <= 60) {
-        return '$$$';
-    }
-    else {
-        return '$$$$';
-    }
-}
-
 async function geocodeAddress(address) {
     const searchQuery = encodeURIComponent(address + ", United States");
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&countrycodes=us&limit=1`;
@@ -50,10 +30,9 @@ async function check_integrity(data , token, check_all) {
         'name',
         'id',
         'address',
-        'cuisine',
-        'service_style',
+        'categories',
+        'service_type',
         'menu',
-        'price',
         'flavors'
     ];
 
@@ -137,16 +116,30 @@ export async function uploadRestaurant(data, token, pool, check_all) {
       return check_res;
     }
 
-    data.price = await price_conversion(data.price);
-
     const geo = await geocodeAddress(data.address);
     data.lat = geo.lat;
     data.lon = geo.lng;
     data.formatted_address = geo.formattedAddress;
 
+    // Normalize field names to align with restaurants.restaurant_info structure
+    // - Use "categories" instead of "cuisine"
+    // - Store service type under "attributes"
+    const normalized = {
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      formatted_address: data.formatted_address,
+      categories: data.categories,
+      attributes: { service_type: data.service_type },
+      menu: data.menu,
+      flavors: data.flavors,
+      lat: data.lat,
+      lon: data.lon,
+    };
+
     await pool.query(
       'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
-      [JSON.stringify(data), data.id]
+      [JSON.stringify(normalized), data.id]
     );
 
     return { status: 200, message: 'Successfully inserted to queue' };
@@ -165,10 +158,15 @@ export async function view_queue(token, pool, check_all) {
     return {
         status: 200,
         message: 'Queue retrieved',
-        data: rows.map(r => ({
-            id: r.id,
-            ...r.restaurant_info
-        }))
+        data: rows.map(r => {
+            const info = r.restaurant_info || {};
+            const attributes = info.attributes || {};
+            return {
+                id: r.id,
+                ...info,
+                service_type: attributes.service_type || info.service_type || '',
+            };
+        })
     };
 }
 
@@ -206,10 +204,15 @@ export async function view_all_restaurants(token, pool, check_all) {
     return {
         status: 200,
         message: 'Restaurants retrieved',
-        data: rows.map(r => ({
-            id: r.id,
-            name: r.name,
-            ...r.restaurant_info
-        }))
+        data: rows.map(r => {
+            const info = r.restaurant_info || {};
+            const attributes = info.attributes || {};
+            return {
+                id: r.id,
+                name: r.name,
+                ...info,
+                service_type: attributes.service_type || info.service_type || '',
+            };
+        })
     };
 }

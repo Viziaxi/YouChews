@@ -302,11 +302,10 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
         const restaurantQuery = `
             SELECT 
                 id,
-                restaurant_info->>'name' AS name,
+                COALESCE(restaurant_info->>'name', name) AS name,
                 restaurant_info->>'address' AS address,
                 restaurant_info->>'formatted_address' AS formatted_address,
-                restaurant_info->>'cuisine' AS cuisine,
-                (restaurant_info->>'price_tier')::int AS price_tier,
+                restaurant_info->>'categories' AS categories,
                 (restaurant_info->>'lat')::float AS lat,
                 (restaurant_info->>'lon')::float AS lon,
                 (6371 * acos(
@@ -332,18 +331,18 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
             const distanceKm = parseFloat(row.distance_km) || 0;
             const distanceMiles = distanceKm * 0.621371; // Convert km to miles
             
-            // Parse cuisine if it's a string, otherwise use as-is
-            let cuisine = row.cuisine;
-            if (typeof cuisine === 'string') {
+            // Parse categories if it's a string, otherwise use as-is
+            let categories = row.categories;
+            if (typeof categories === 'string') {
                 try {
-                    cuisine = JSON.parse(cuisine);
+                    categories = JSON.parse(categories);
                 } catch (e) {
                     // If not JSON, treat as single string and convert to array
-                    cuisine = [cuisine];
+                    categories = [categories];
                 }
             }
-            if (!Array.isArray(cuisine)) {
-                cuisine = cuisine ? [cuisine] : [];
+            if (!Array.isArray(categories)) {
+                categories = categories ? [categories] : [];
             }
 
             return {
@@ -351,8 +350,7 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
                 name: row.name || 'Unknown Restaurant',
                 address: row.address || '',
                 formatted_address: row.formatted_address || row.address || '',
-                cuisine: cuisine,
-                price_tier: row.price_tier || 1,
+                categories,
                 lat: parseFloat(row.lat) || 0,
                 lon: parseFloat(row.lon) || 0,
                 distance_km: distanceKm,
