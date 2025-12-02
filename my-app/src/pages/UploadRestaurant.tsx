@@ -1,179 +1,136 @@
-import { useState, useEffect, FormEvent } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 
-// Define the structure of the data we're sending to the backend
-interface RestaurantData {
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || "https://youchews.onrender.com";
+
+interface RestaurantFormData {
   name: string;
-  id: string;
+  id: number;
   address: string;
   cuisine: string;
   service_style: string;
-  menu: string[]; // Array of strings
+  menu: string;
   price: number;
-  flavors: string[]; // Array of strings
+  flavors: string;
 }
 
-// State type for the component
-interface UploadState {
-  name: string;
-  id: string;
-  address: string;
-  cuisine: string;
-  service_style: string;
-  menuInput: string; // Comma-separated string input for menu
-  price: number | ""; // Use '' for initial empty state
-  flavorsInput: string; // Comma-separated string input for flavors
+interface UploadRestaurantProps {
+  initialData?: RestaurantFormData | null;
+  restaurantId?: number;
+  onSuccess?: () => void;
 }
 
-interface Props {
-  id: string; // assuming the page already receives an ID
-}
-
-// Main component
-const UploadRestaurantPage: React.FC = () => {
-  const [token, setToken] = useState<string | null>(null);
-  const [idee, setIdee] = useState<string>("");
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  const [formData, setFormData] = useState<UploadState>({
-    name: "",
-    id: "",
-    address: "",
-    cuisine: "",
-    service_style: "",
-    menuInput: "",
-    price: "",
-    flavorsInput: "",
+const UploadRestaurant: React.FC<UploadRestaurantProps> = ({ 
+  initialData = null, 
+  restaurantId,
+  onSuccess 
+}) => {
+  const [formData, setFormData] = useState<RestaurantFormData>({
+    name: initialData?.name || "",
+    id: initialData?.id || restaurantId || 0,
+    address: initialData?.address || "",
+    cuisine: initialData?.cuisine || "",
+    service_style: initialData?.service_style || "",
+    menu: initialData?.menu || "",
+    price: initialData?.price || 0,
+    flavors: initialData?.flavors || "",
   });
-  const [message, setMessage] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const backendUrl = "https://youchews.onrender.com/upload_restaurant"; // Update this if your backend is on a different domain/port
 
-  // 1. Check for token on component mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (storedToken) {
-      setToken(storedToken);
-    } else {
-      setMessage("Authorization token not found. Please log in.");
-    }
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-    if (!storedUser) {
-      console.error("No user stored in localStorage.");
-      setMessage("Authorization token not found. Please log in.");
-
-      return;
-    }
-
-    const user = JSON.parse(storedUser);
-    setIdee(user.id);
-  }, []);
-
-  // Handle input changes
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]:
-        name === "price" ? (value === "" ? "" : parseFloat(value)) : value,
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "price" || name === "id" ? parseFloat(value) || 0 : value,
     }));
   };
 
-  // Handle form submission
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const token = localStorage.getItem("token");
     if (!token) {
-      setMessage("Cannot submit: No valid token found.");
+      setError("No authentication token found. Please log in.");
+      setLoading(false);
       return;
     }
 
-    setIsSubmitting(true);
-    setMessage("Submitting restaurant data...");
-
-    // Convert comma-separated strings to arrays
-    const parsedData: RestaurantData = {
-      name: formData.name,
-      id: idee,
-      address: formData.address,
-      cuisine: formData.cuisine,
-      service_style: formData.service_style,
-      // Split by comma, trim whitespace, and filter out empty strings
-      menu: formData.menuInput
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
-      price: typeof formData.price === "number" ? formData.price : 0, // Ensure price is a number
-      flavors: formData.flavorsInput
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
+    // Ensure id is set from restaurantId if not provided
+    const submitData = {
+      ...formData,
+      id: formData.id || restaurantId || 0,
     };
 
-    try {
-      const response = await axios.post(backendUrl, parsedData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+    // Validate required fields
+    if (!submitData.name || !submitData.address || !submitData.cuisine || 
+        !submitData.service_style || !submitData.menu || !submitData.flavors || 
+        submitData.price <= 0) {
+      setError("Please fill in all required fields.");
+      setLoading(false);
+      return;
+    }
 
-      // The backend should return a status number (e.g., 200, 201)
-      setMessage(`Upload successful! Status: ${response.status}`);
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-          console.error('Server response:', error.response.data);
-          setMessage(`Upload failed: ${error.response.status} - ${error.response.data.error || 'Server error'}`);
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/upload_restaurant`,
+        submitData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.data.status === 200) {
+        setSuccess(response.data.message || "Restaurant information submitted successfully!");
+        if (onSuccess) {
+          setTimeout(() => onSuccess(), 1500);
+        }
       } else {
-        // Handle network or other errors
-        setMessage(
-          `An unexpected error occurred: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
-        );
+        setError(response.data.error || "Failed to submit restaurant information.");
       }
+    } catch (err: any) {
+      setError(
+        err.response?.data?.error || 
+        err.message || 
+        "Failed to submit restaurant information. Please try again."
+      );
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  // --- Rendering Logic ---
-
-  if (!token && message.includes("token not found")) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-        <div className="bg-white p-6 rounded-lg shadow-xl text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">
-            Access Denied
-          </h1>
-          <p className="text-gray-700">{message}</p>
-          <p className="mt-2 text-sm text-gray-500">
-            Please ensure you have a valid token in local storage.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className={`min-h-screen flex items-center justify-center bg-blue-100 p-4 relative`}
-    >
-      <div className="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-2xl border-t-4 border-t-[#3b82f6]">
-        <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
-          Upload New Restaurant
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        <h1 className="text-4xl font-bold text-center text-gray-800 mb-8">
+          {initialData ? "Update Restaurant Information" : "Upload Restaurant Information"}
         </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Row 1: Name and ID */}
-          <div>
+        <div className="bg-white rounded-3xl shadow-2xl p-8">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
+              {success}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label
-                htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Restaurant Name
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Restaurant Name *
               </label>
               <input
                 type="text"
@@ -182,38 +139,30 @@ const UploadRestaurantPage: React.FC = () => {
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter restaurant name"
               />
             </div>
-          </div>
 
-          {/* Row 2: Address */}
-          <div>
-            <label
-              htmlFor="address"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Address
-            </label>
-            <input
-              type="text"
-              id="address"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          {/* Row 3: Cuisine, Service Style, Price */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label
-                htmlFor="cuisine"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Cuisine Type
+              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+                Address *
+              </label>
+              <input
+                type="text"
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter full address"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="cuisine" className="block text-sm font-medium text-gray-700 mb-2">
+                Cuisine Type *
               </label>
               <input
                 type="text"
@@ -222,16 +171,14 @@ const UploadRestaurantPage: React.FC = () => {
                 value={formData.cuisine}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g., Italian, Mexican"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Italian, Mexican, Asian"
               />
             </div>
+
             <div>
-              <label
-                htmlFor="service_style"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Service Style
+              <label htmlFor="service_style" className="block text-sm font-medium text-gray-700 mb-2">
+                Service Style *
               </label>
               <input
                 type="text"
@@ -240,105 +187,76 @@ const UploadRestaurantPage: React.FC = () => {
                 value={formData.service_style}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g., sit_down, take_out"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Fine Dining, Casual, Fast Food"
               />
             </div>
+
             <div>
-              <label
-                htmlFor="price"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Price (Average)
+              <label htmlFor="menu" className="block text-sm font-medium text-gray-700 mb-2">
+                Menu Description *
+              </label>
+              <textarea
+                id="menu"
+                name="menu"
+                value={formData.menu}
+                onChange={handleChange}
+                required
+                rows={4}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Describe your menu items and specialties"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-2">
+                Average Price per Person ($) *
               </label>
               <input
                 type="number"
                 id="price"
                 name="price"
-                value={formData.price}
+                value={formData.price || ""}
                 onChange={handleChange}
                 required
-                min="0"
+                min="1"
                 step="0.01"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="No dollar sign"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., 25.00"
               />
+              <p className="mt-1 text-sm text-gray-500">
+                This will be converted to a price tier ($, $$, $$$, $$$$)
+              </p>
             </div>
-          </div>
 
-          {/* Row 4: Menu and Flavors (Comma Separated) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label
-                htmlFor="menuInput"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Menu Items (Comma Separated)
+              <label htmlFor="flavors" className="block text-sm font-medium text-gray-700 mb-2">
+                Flavor Profile *
               </label>
               <input
                 type="text"
-                id="menuInput"
-                name="menuInput"
-                value={formData.menuInput}
+                id="flavors"
+                name="flavors"
+                value={formData.flavors}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g., Burger, Fries, Salad"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., Spicy, Sweet, Savory, Umami"
               />
             </div>
-            <div>
-              <label
-                htmlFor="flavorsInput"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Flavor Profiles (Comma Separated)
-              </label>
-              <input
-                type="text"
-                id="flavorsInput"
-                name="flavorsInput"
-                value={formData.flavorsInput}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="e.g., Spicy, Savory, Sweet"
-              />
-            </div>
-          </div>
 
-          {/* Submission Button */}
-          <div>
             <button
               type="submit"
-              disabled={isSubmitting || !token}
-              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white transition duration-200 ${
-                isSubmitting || !token
-                  ? "bg-indigo-400 cursor-not-allowed"
-                  : "text-white bg-blue-700 hover:bg-blue-800 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
-              }`}
+              disabled={loading}
+              className="w-full py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Sending Data..." : "Upload Restaurant"}
+              {loading ? "Submitting..." : initialData ? "Update Restaurant" : "Submit Restaurant"}
             </button>
-          </div>
-
-          {/* Message Display */}
-          {message && (
-            <div
-              className={`mt-4 p-4 rounded-md ${
-                message.includes("successful")
-                  ? "bg-green-100 text-green-800"
-                  : message.includes("failed")
-                  ? "bg-red-100 text-red-800"
-                  : "bg-blue-100 text-blue-800"
-              }`}
-            >
-              <p className="font-medium">{message}</p>
-            </div>
-          )}
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
 };
 
-export default UploadRestaurantPage;
+export default UploadRestaurant;

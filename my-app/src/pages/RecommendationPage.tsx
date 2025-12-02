@@ -143,8 +143,8 @@ const RecommendationPage: React.FC = () => {
       );
 
       if (response.status === 200 && response.data.status === 200) {
-        setRecommendations(response.data.data);
-        setMetadata(response.data.metadata);
+        setRecommendations(Array.isArray(response.data.data) ? response.data.data : []);
+        setMetadata(response.data.metadata || null);
       } else {
         setError(response.data.error || "Failed to retrieve recommendations from server.");
       }
@@ -214,7 +214,7 @@ const RecommendationPage: React.FC = () => {
   }
 
   // Check if we have run out of recommendations
-  if (currentIndex >= recommendations.length) {
+  if (!recommendations || currentIndex >= recommendations.length) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="text-center p-8 bg-white rounded-xl shadow-lg">
@@ -236,6 +236,22 @@ const RecommendationPage: React.FC = () => {
   }
 
   const currentRec = recommendations[currentIndex];
+
+  // Safety check: if no current recommendation, show empty state
+  if (!currentRec) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center p-8 bg-white rounded-xl shadow-lg">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            No recommendations available
+          </h2>
+          <p className="text-gray-600">
+            We couldn't find any recommendations for you at this time.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // --- Main UI ---
   return (
