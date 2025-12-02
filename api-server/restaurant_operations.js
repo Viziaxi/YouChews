@@ -32,8 +32,6 @@ async function check_integrity(data , token, check_all) {
         'address',
         'categories',
         'service_type',
-        'menu',
-        'flavors'
     ];
 
 
@@ -131,8 +129,6 @@ export async function uploadRestaurant(data, token, pool, check_all) {
       formatted_address: data.formatted_address,
       categories: data.categories,
       attributes: { service_type: data.service_type },
-      menu: data.menu,
-      flavors: data.flavors,
       lat: data.lat,
       lon: data.lon,
     };
