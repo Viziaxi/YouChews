@@ -23,7 +23,7 @@ export default function Login({ userType = "user" }) {
       title: "Restaurant Login",
       endpoint: "/restaurant_login",
       bgColor: "bg-blue-100",
-      successRedirect: "/UploadRestaurant",
+      successRedirect: "/RestaurantDashboard",
       registerPath: "/restaurant_register",
     },
     admin: {
