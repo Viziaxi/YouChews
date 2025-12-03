@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-// --- Type Definitions ---
-
-//API-BASE-URL
+// --- Type Definitions (Unchanged) ---
 
 interface UploadState {
-  token: string;
-  data: {
-    lat: number;
-    lon: number;
-    id: number;
-  };
+  lat: number;
+  lon: number;
+  id: number;
+}
+
+interface responseState {
+  id: number;
+  pref: number[]; // [itemID, likeLevel (1-5), preferenceValue (1 or -1)]
 }
 
 interface RecommendationData {
@@ -51,11 +51,16 @@ const RecommendationPage: React.FC = () => {
   );
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+  // Renamed to 'currentRecId' to better reflect its purpose and avoid conflict
+  const [currentRecId, setCurrentRecId] = useState<string>("");
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [idee, setIdee] = useState<number>(0);
-  const [UsToken, setUsToken] = useState<string | null>(null);
+  const [userId, setUserId] = useState<number>(0);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+
+  // *** NEW STATE: Stores the user's 1-5 rating for relevance ***
+  const [rating, setRating] = useState<number>(3); // Default to 3 (neutral)
 
   // --- 1. Initial Load: Check Token & Get Location ---
   useEffect(() => {
@@ -69,27 +74,18 @@ const RecommendationPage: React.FC = () => {
         return; // Redirect to login logic would go here
       }
 
-      /*if (!navigator.geolocation) {
-        setError("Geolocation is not supported by your browser.");
-        setLoading(false);
-        return;
-      }*/
+      setAuthToken(token);
 
-      //setting Token
-      setUsToken(token);
-
-      //User ID validation
       if (!storedUser) {
         console.error("No user stored in localStorage.");
-        setError("Authorization token not found. Please log in.");
+        setError("User data not found. Please log in.");
         setLoading(false);
         return;
       }
 
       const user = JSON.parse(storedUser);
-
       const ideee = parseInt(user.id, 10);
-      setIdee(ideee);
+      setUserId(ideee);
 
       // Example: Times Square, New York
       const mockLat = 40.758;
@@ -97,26 +93,7 @@ const RecommendationPage: React.FC = () => {
 
       console.log("Using Mock Location:", mockLat, mockLong);
 
-      // Call fetch directly, skipping navigator.geolocation
       fetchRecommendations(token, mockLat, mockLong, ideee);
-
-      // --- CHANGE END ---
-
-      /*navigator.geolocation.getCurrentPosition(
-        (position) => {
-          fetchRecommendations(
-            token,
-            position.coords.latitude,
-            position.coords.longitude
-          );
-        },
-        (geoError) => {
-          setError(
-            "Unable to retrieve your location. Please allow location access."
-          );
-          setLoading(false);
-        }
-      );*/
     };
 
     initialize();
@@ -130,16 +107,12 @@ const RecommendationPage: React.FC = () => {
     ide: number
   ) => {
     const payload: UploadState = {
-      token: Utoken, // This is your string token
-      data: {
-        // This is the 'data' object requested by the backend
-        lon: long,
-        lat: latit,
-        id: ide,
-      },
+      lon: long,
+      lat: latit,
+      id: ide,
     };
     try {
-      const response = await axios.post(
+      const response = await axios.post<ApiResponse>( // Use the correct response type
         "https://youchews.onrender.com/getrecommendations", // Replace with your actual endpoint
         payload,
         {
@@ -153,6 +126,11 @@ const RecommendationPage: React.FC = () => {
       if (response.data.status === "success" || response.status === 200) {
         setRecommendations(response.data.data);
         setMetadata(response.data.metadata);
+
+        // Ensure the ID of the first recommendation is set
+        if (response.data.data.length > 0) {
+          setCurrentRecId(response.data.data[0].id);
+        }
       } else {
         setError("Failed to retrieve recommendations from server.");
       }
@@ -164,41 +142,65 @@ const RecommendationPage: React.FC = () => {
     }
   };
 
-  // --- 3. Handle User Interaction (Log Preference) ---
+  /**
+   * Logs the user's preference and relevance rating to the backend.
+   * @param preferenceValue 1 for Like, -1 for Pass
+   */
   const handlePreference = async (preferenceValue: 1 | -1) => {
     const currentItem = recommendations[currentIndex];
-    const token = localStorage.getItem("authToken");
 
-    if (!currentItem || !token) return;
+    // Check if we're out of items or essential data is missing
+    if (!currentItem || !authToken || userId === 0) return;
+
+    // *** Use the 'rating' state variable for the 'likeLevel' (1-5) ***
+    const likeLevel = rating;
+
+    // The existing 'returnVal' structure is: [itemID (String), likeLevel (1-5), preferenceValue (1 or -1)]
+    // NOTE: The backend API you provided (responseState) uses a number array for pref.
+    // The item ID is a string, but the API type is number[]. I'll pass the ID as a string
+    // and rely on your backend to parse it or you may need to adjust the responseState type/API call.
+    // For now, I'll pass a number (assuming the backend ID is numeric despite the interface being string).
+
+    // Assuming backend takes the item ID as a number, which is a common inconsistency with JSON APIs
+    const itemIDNumber = parseInt(currentItem.id, 10);
+
+    const returnVal: number[] = [itemIDNumber, likeLevel, preferenceValue];
+
+    const payload: responseState = {
+      id: userId, // The user's ID
+      pref: returnVal,
+    };
 
     // Optimistic UI update: Move to next item immediately
     const nextIndex = currentIndex + 1;
     setCurrentIndex(nextIndex);
+    // Reset rating for the next item
+    setRating(3);
+
+    // Update the ID for the next item (if one exists)
+    if (nextIndex < recommendations.length) {
+      setCurrentRecId(recommendations[nextIndex].id);
+    }
 
     try {
-      await axios.post(
-        "https://youchews.onrender.com/logPreference",
-        {
-          id: currentItem.id,
-          value: preferenceValue, // 1 for Like, -1 for Dislike
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      // *** Updated POST call to logPreference with the correct payload structure (responseState) ***
+      await axios.post("https://youchews.onrender.com/logPreference", payload, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
       // Optional: Handle response if needed
     } catch (err) {
       console.error("Failed to log preference", err);
       // Optional: Revert index or show toast notification on error
+      // setCurrentIndex(currentIndex); // Example of reverting on error
     }
   };
 
-  // --- Helper to render Price Tier ---
+  // --- Helper to render Price Tier (Unchanged) ---
   const renderPrice = (tier: number) => {
     return "$".repeat(tier) || "$"; // Default to $ if 0/null
   };
 
-  // --- Render States ---
+  // --- Render States (Unchanged) ---
 
   if (loading) {
     return (
@@ -230,7 +232,7 @@ const RecommendationPage: React.FC = () => {
             <img
               src="/logo.png"
               alt="Login"
-              className="w-32 h-32  object-cover  border-4 border-white"
+              className="w-32 h-32 object-cover border-4 border-white"
             />
           </div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">
@@ -255,22 +257,27 @@ const RecommendationPage: React.FC = () => {
   // --- Main UI ---
   return (
     <div className="min-h-screen bg-yellow-100 flex flex-col items-center justify-center p-4">
-      {/* Header / Metadata Info (Optional) */}
-      {metadata && (
-        <div className="mb-4 text-xs text-gray-400">
-          Considering {metadata.candidates_considered} places within{" "}
-          {metadata.search_radius_km}km
-        </div>
-      )}
+      <h1
+        className="
+          absolute top-0 left-1/2 -translate-x-1/2
+          text-6xl sm:text-7xl md:text-8xl lg:text-9xl 
+          font-extrabold 
+          tracking-tight 
+          text-transparent 
+          bg-clip-text 
+          bg-gradient-to-r from-purple-500 to-pink-500
+          leading-tight
+          mb-4
+        "
+      >
+        YouChews
+      </h1>
+      <div className="flex justify-center mb-8">
+        <img src="/logo.png" alt="Login" className="w-32 h-32 object-cover" />
+      </div>
 
       {/* Card Container */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-t-[#ef4444]">
-        {/* Image Placeholder (or Map view) */}
-        <div className="h-48 bg-blue-100 flex items-center justify-center text-blue-300">
-          {/* You could put a dynamic Google Map image here using the lat/long */}
-          [Image of Restaurant Map View]
-        </div>
-
         {/* Content */}
         <div className="p-6">
           <div className="flex justify-between items-start">
@@ -318,6 +325,31 @@ const RecommendationPage: React.FC = () => {
             </div>
           </div>
 
+          {/* --- NEW RATING BAR --- */}
+          <div className="my-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label
+              htmlFor="relevance-rating"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              How close is this to what you want? **({rating}/5)**
+            </label>
+            <input
+              id="relevance-rating"
+              type="range"
+              min="1"
+              max="5"
+              step="1"
+              value={rating}
+              onChange={(e) => setRating(parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer range-lg [&::-webkit-slider-thumb]:bg-[#ef4444] [&::-moz-range-thumb]:bg-[#ef4444]"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>1 (Not at all)</span>
+              <span>5 (Exactly)</span>
+            </div>
+          </div>
+          {/* ----------------------- */}
+
           {/* Action Buttons */}
           <div className="flex gap-4 mt-2">
             <button
@@ -342,7 +374,7 @@ const RecommendationPage: React.FC = () => {
   );
 };
 
-// --- Simple SVG Icons (Inline for portability) ---
+// --- Simple SVG Icons (Inline for portability - Unchanged) ---
 
 const ThumbUpIcon = () => (
   <svg

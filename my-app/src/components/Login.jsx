@@ -16,7 +16,7 @@ export default function Login({ userType = "user" }) {
       title: "Welcome Back",
       endpoint: "/login",
       bgColor: "bg-yellow-100",
-      successRedirect: "/recommendertest",
+      successRedirect: "/recommender",
       registerPath: "/register",
     },
     restaurant: {
