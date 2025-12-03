@@ -179,145 +179,191 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
-export async function getRestaurantsWithinDistance(
-  pool,
-  userLat,
-  userLon,
-  radiusKm = 10,
-  limit = 50
-) {
-  if (!userLat || !userLon) {
-    throw new Error("Latitude and longitude are required");
-  }
+export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
+    {
+        if (!userLat || !userLon) {
+            throw new Error("Latitude and longitude are required");
+        }
 
-  const query = `
-    SELECT 
-      id,
-      restaurant_info->>'name' AS name,
-      restaurant_info->>'address' AS address,
-      restaurant_info->>'formatted_address' AS formatted_address,
-      restaurant_info->>'price_tier' AS price_tier,
-      restaurant_info->>'cuisine' AS cuisine,
-      (restaurant_info->>'lat')::float AS lat,
-      (restaurant_info->>'lon')::float AS lon,
-      
-      -- Haversine distance in kilometers (same as your JS function)
-      (
-        6371 * acos(
-          cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) *
-          cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
-          sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
-        )
-      ) AS distance_km
-
-    FROM restaurants
-    WHERE 
-      restaurant_info ? 'lat' 
+        const query = `
+            SELECT id,
+                   (6371 * acos(
+                           cos(radians($1)) *
+                           cos(radians((restaurant_info ->>'lat'):: float)) *
+                           cos(radians((restaurant_info ->>'lon'):: float) - radians($2)) +
+                           sin(radians($1)) *
+                           sin(radians((restaurant_info ->>'lat'):: float))
+                           )) AS distance_km
+            FROM restaurants
+            WHERE restaurant_info ? 'lat'
       AND restaurant_info ? 'lon'
       AND (restaurant_info->>'lat')::float IS NOT NULL
       AND (restaurant_info->>'lon')::float IS NOT NULL
+            HAVING (6371 * acos(
+                cos(radians($1)) *
+                cos(radians((restaurant_info->>'lat'):: float)) *
+                cos(radians((restaurant_info->>'lon'):: float) - radians($2)) +
+                sin(radians($1)) *
+                sin(radians((restaurant_info->>'lat'):: float))
+                )) <= $3
+            ORDER BY distance_km ASC
+                LIMIT $4;
+        `;
 
-    HAVING 
-      6371 * acos(
-        cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) *
-        cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
-        sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
-      ) <= $3
-
-    ORDER BY distance_km ASC
-    LIMIT $4
-  `;
-
-  try {
-    const { rows } = await pool.query(query, [
-      userLat,
-      userLon,
-      radiusKm,
-      limit
-    ]);
-
-    // Add distance in miles too if you want
-    return rows.map(row => ({
-      ...row,
-      distance_miles: (row.distance_km * 0.621371).toFixed(2)
-    }));
-  } catch (error) {
-    console.error("Nearby search failed:", error);
-    throw error;
-  }
+        try {
+            const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
+            return rows.map(row => row.id); // ← only IDs
+        } catch (error) {
+            console.error("Failed to get nearby restaurant IDs:", error);
+            throw error;
+        }
+    }
 }
 
-export async function getRecommendations(token, pool, data, check_all, numRecommendations = 10) {
-  try {
+export async function getRecommendations(token, pool, data, check_all, numRecommendations, radiusKm = 10, limit = 50) {
+    try {
+        const check_authorization = await check_all('user', token);
+        if (check_authorization.status !== 200) {
+            return {status: check_authorization.status, error: check_authorization.message};
+        }
 
-    const auth = await check_all('user', token);
-    if (auth.status !== 200) {
-      return auth;
-    }
+        if (!data.lon || !data.lat || !data.id) {
+            return {status: 400, error: 'Missing required field'};
+        }
 
-    if (!data?.id) {
-      return { status: 400, error: 'Missing required field: data.id' };
-    }
+        const restaurant_idList = getRestaurantIdsWithinDistance(pool, data.lat, data.lon, radiusKm, limit);
 
-    const userId = data.id;
+        if (restaurant_idList.length === 0) {
+            return {status: 200, message: "No restaurant nearby."}; // no restaurants nearby → empty recommendations
+        }
 
-    // Verify user exists
-    const userRes = await pool.query(
-      'SELECT user_preferences FROM users WHERE id = $1',
-      [userId]
-    );
+        const userId = data.id;
+        const res = await pool.query(
+            'SELECT user_preferences FROM users WHERE id = $1',
+            [userId]
+        );
+        if (res.rows.length === 0) {
+            return {status: 404, error: 'User not found'};
+        }
 
-    if (userRes.rows.length === 0) {
-      return { status: 404, error: 'User not found' };
-    }
+        const runPython = new Promise((resolve, reject) => {
+            const pythonProcess = spawn('python', [
+                '../recommender-system/src/main.py',
+                JSON.stringify(restaurant_idList), //  may not need to be stringify
+                userId,
+                numRecommendations
+            ]);
 
-    // Get all restaurant IDs (or only nearby ones — better for performance)
-    const { rows } = await pool.query('SELECT id FROM restaurants LIMIT 1000');
-    const idList = rows.map(r => r.id);
+            let stdoutData = '';
+            let stderrData = '';
 
-    // Run Python recommender
-    const pythonOutput = await new Promise((resolve, reject) => {
-      const pythonProcess = spawn('python3', [
-        path.join(__dirname, '../recommender-system/src/main.py'),
-        JSON.stringify(idList),
-        userId,
-        numRecommendations.toString()
-      ]);
+            pythonProcess.stdout.on('data', (data) => {
+                stdoutData += data.toString();
+            });
 
-      let stdout = '';
-      let stderr = '';
+            pythonProcess.stderr.on('data', (data) => {
+                stderrData += data.toString();
+            });
 
-      pythonProcess.stdout.on('data', (data) => { stdout += data.toString(); });
-      pythonProcess.stderr.on('data', (data) => { stderr += data.toString(); });
-
-      pythonProcess.on('close', (code) => {
-        if (code === 0) {
-          try {
-            const parsed = JSON.parse(stdout.trim());
-                    resolve(parsed); // expected: [{id: "abc", score: 0.95}, ...]
-                  } catch (e) {
-                    reject(new Error(`JSON parse error: ${e.message}\nOutput: ${stdout}`));
-                  }
+            pythonProcess.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const result = JSON.parse(stdoutData);
+                        resolve(result);
+                    } catch (parseError) {
+                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+                    }
                 } else {
-                  reject(new Error(`Python exited with code ${code}: ${stderr}`));
+                    reject(new Error(`Python process failed: ${stderrData}`));
                 }
-              });
+            });
 
-      pythonProcess.on('error', (err) => {
-        reject(new Error(`Failed to start Python: ${err.message}`));
-      });
-    });
+            pythonProcess.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python process: ${error.message}`));
+            });
+        });
 
-    return {
-      status: 200,
-      data: pythonOutput
-    };
+        const recommendations = await runPython;
+        return {status: 200, data: recommendations};
 
-  } catch (error) {
-    console.error('getRecommendations error:', error.message);
-    return { status: 500, error: error.message };
-  }
+    } catch (error) {
+        console.error('Error in getRecommendations:', error);
+        return {status: 500, error: error.message};
+    }
 }
+
+/*
+export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
+    try {
+        const check_authorization = await check_all('user', token);
+        if (check_authorization.status !== 200) {
+            return { status: check_authorization.status, error: check_authorization.message };
+        }
+
+        if (!data || !data.id) {
+            return { status: 400, error: 'Missing required field: data.id' };
+        }
+        const userId = data.id;
+        const res = await pool.query(
+            'SELECT user_preferences FROM users WHERE id = $1',
+            [userId]
+        );
+        if (res.rows.length === 0) {
+            return { status: 404, error: 'User not found' };
+        }
+        const contentRes = await pool.query(
+            `SELECT id FROM restaurants;`
+        );
+
+        const idList = contentRes.rows.map(r => r.id);
+
+        const runPython = new Promise((resolve, reject) => {
+            const pythonProcess = spawn('python', [
+                '../recommender-system/src/main.py',
+                idList,
+                userId,
+                numRecommendations
+            ]);
+
+            let stdoutData = '';
+            let stderrData = '';
+
+            pythonProcess.stdout.on('data', (data) => {
+                stdoutData += data.toString();
+            });
+
+            pythonProcess.stderr.on('data', (data) => {
+                stderrData += data.toString();
+            });
+
+            pythonProcess.on('close', (code) => {
+                if (code === 0) {
+                    try {
+                        const result = JSON.parse(stdoutData);
+                        resolve(result);
+                    } catch (parseError) {
+                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+                    }
+                } else {
+                    reject(new Error(`Python process failed: ${stderrData}`));
+                }
+            });
+
+            pythonProcess.on('error', (error) => {
+                reject(new Error(`Failed to spawn Python process: ${error.message}`));
+            });
+        });
+
+        const recommendations = await runPython;
+        return { status: 200, data: recommendations };
+
+    } catch (error) {
+        console.error('Error in getRecommendations:', error);
+        return { status: 500, error: error.message };
+    }
+}
+*/
+
 
 export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {
