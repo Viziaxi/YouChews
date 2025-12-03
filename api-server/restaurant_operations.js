@@ -32,6 +32,8 @@ async function check_integrity(data , token, check_all) {
         'address',
         'categories',
         'service_type',
+        'menu',
+        'flavors'
     ];
 
 
@@ -65,7 +67,7 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
         try {
             const restaurantInfo = row.restaurant_info;
             const restaurantName = restaurantInfo?.name || `restaurant_${itemId}`;
-            
+
             // Check if restaurant with this name already exists
             const checkExisting = await pool.query('SELECT id FROM restaurants WHERE name = $1', [restaurantName]);
             if (checkExisting.rows.length > 0) {
@@ -76,7 +78,7 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
 
             // Generate a default password using the restaurant ID
             const defaultPassword = `temp_${itemId}_${Date.now()}`;
-            
+
             await pool.query(
                 'INSERT INTO restaurants (name, password, restaurant_info) VALUES ($1, $2, $3)',
                 [restaurantName, defaultPassword, restaurantInfo]
@@ -123,19 +125,23 @@ export async function uploadRestaurant(data, token, pool, check_all) {
     // - Use "categories" instead of "cuisine"
     // - Store service type under "attributes"
     const normalized = {
-      id: data.id,
-      name: data.name,
-      address: data.address,
-      formatted_address: data.formatted_address,
-      categories: data.categories,
-      attributes: { service_type: data.service_type },
-      lat: data.lat,
-      lon: data.lon,
+        name: data.name,
+        address: data.address,
+        formatted_address: data.formatted_address || data.address,
+        lat: data.lat,
+        lon: data.lon,
+        menu: data.menu,
+        cuisine: Array.isArray(data.categories)
+            ? data.categories.join(', ')
+            : data.categories || '',
+        flavors: data.flavors || [],
+        service_style: data.service_type || 'Sit-down',
+        price: data.price || '$'
     };
 
     await pool.query(
-      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
-      [JSON.stringify(normalized), data.id]
+        'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
+        [JSON.stringify(normalized), data.id]
     );
 
     return { status: 200, message: 'Successfully inserted to queue' };
