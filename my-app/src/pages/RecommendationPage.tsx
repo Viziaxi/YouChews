@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 
 // --- Type Definitions (Unchanged) ---
 
@@ -88,8 +89,8 @@ const RecommendationPage: React.FC = () => {
       setUserId(ideee);
 
       // Example: Times Square, New York
-      const mockLat = 40.758;
-      const mockLong = -73.9855;
+      const mockLat = 37.354107;
+      const mockLong = /*-*/ 121.955238;
 
       console.log("Using Mock Location:", mockLat, mockLong);
 
@@ -248,6 +249,12 @@ const RecommendationPage: React.FC = () => {
             Refresh Search
           </button>
         </div>
+        <Link
+          to="/login" // Replace '/target-page' with your actual destination path
+          className="absolute bottom-10 text-black hover:text-black-700 transition duration-150"
+        >
+          Log Out
+        </Link>
       </div>
     );
   }
@@ -370,6 +377,12 @@ const RecommendationPage: React.FC = () => {
           </div>
         </div>
       </div>
+      <Link
+        to="/login" // Replace '/target-page' with your actual destination path
+        className="absolute bottom-10 text-black hover:text-black-700 transition duration-150"
+      >
+        Log Out
+      </Link>
     </div>
   );
 };

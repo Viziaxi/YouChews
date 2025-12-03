@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 
 // Define the structure of the data we're sending to the backend
 interface RestaurantData {
@@ -364,6 +365,12 @@ const UploadRestaurantPage: React.FC = () => {
           )}
         </form>
       </div>
+      <Link
+        to="/login" // Replace '/target-page' with your actual destination path
+        className="absolute bottom-10 text-black hover:text-black-700 transition duration-150"
+      >
+        Log Out
+      </Link>
     </div>
   );
 };
