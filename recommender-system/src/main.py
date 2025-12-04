@@ -7,6 +7,7 @@ import psycopg2
 import pandas as pd
 from contentbasedsystem import find_next
 
+# Connect to the PostgreSQL database
 def connect_database():
     conn_string = os.getenv('DATABASE_URL')
     if not conn_string:
@@ -21,6 +22,7 @@ def connect_database():
         print(f"DB connection failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+# Execute recommendation based on command-line arguments (normal operation)
 def execute_from_args():
     if len(sys.argv) != 4:
         print("ERROR: Expected 3 args", file=sys.stderr)

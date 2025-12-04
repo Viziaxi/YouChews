@@ -1,9 +1,10 @@
-# contentbasedsystem.py
+# recommender-system/src/contentbasedsystem.py
 
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Prepare strings for vectorization
 def prepare_strings(x):
     if isinstance(x, list):
         return ' '.join([str.lower(str(item)).replace(" ", "") for item in x])
@@ -12,6 +13,7 @@ def prepare_strings(x):
     else:
         return ""
 
+# Create a combined vector string for each field in a row
 def create_vector_string(row):
     parts = []
     for field in ["flavors", "menu", "name", "price", "service_style", "cuisine"]:
@@ -26,6 +28,7 @@ def create_vector_string(row):
             parts.append(str(value))
     return ' '.join(parts)
 
+# Main function to find next recommended items using content-based filtering
 def find_next(content: pd.DataFrame, userdata: pd.DataFrame, num: int = 1) -> list[int]:
     if userdata.empty:
         return content["id"].head(num).tolist()
@@ -51,6 +54,7 @@ def find_next(content: pd.DataFrame, userdata: pd.DataFrame, num: int = 1) -> li
 
     liked_items["vector_text"] = liked_items.apply(create_vector_string, axis=1)
 
+    # Vectorization and similarity computation, excluding stop words
     vectorizer = CountVectorizer(stop_words="english")
     content_matrix = vectorizer.fit_transform(content["vector_text"])
     user_matrix = vectorizer.transform(liked_items["vector_text"])
