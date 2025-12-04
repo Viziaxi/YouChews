@@ -108,15 +108,13 @@ def execute_from_args():
 # Entry point
 # --------------------------------------------------------------
 if __name__ == "__main__":
-    print("=== YouChews Recommender System (Python) Started ===")
     try:
         result = execute_from_args()
-        # Output must be valid JSON array of integers
+        # THIS MUST BE THE ONLY THING PRINTED TO STDOUT
         print(json.dumps(result))
         sys.stdout.flush()
+        sys.exit(0)
     except Exception as e:
-        error_response = {"error": str(e)}
-        print(json.dumps(error_response), file=sys.stderr)
+        # Only error goes to stderr
+        print(json.dumps({"error": str(e)}), file=sys.stderr)
         sys.exit(1)
-
-    print("=== Recommender Finished Successfully ===")

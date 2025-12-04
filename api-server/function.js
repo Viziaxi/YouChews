@@ -223,118 +223,108 @@ export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, rad
     }
 }
 
-export async function getRecommendations(token, pool, data, check_all, numRecommendations = 10, radiusKm = 10, limit = 50) {
+export async function getRecommendations(token, pool, body, check_all, numRecommendations = 10) {
+    const auth = await check_all('user', token);
+    if (auth.status !== 200) {
+        return { status: auth.status, error: auth.message };
+    }
+
+    const userId = auth.user.id;
+    const { lat, lon } = body;
+    if (!lat || !lon) {
+        return { status: 400, error: 'Latitude and longitude are required' };
+    }
+
+    const radiusKm = 10;
+
     try {
-        const auth = await check_all('user', token);
-        if (auth.status !== 200) {
-            return { status: auth.status, error: auth.message };
-        }
-
-        const { lat, lon, id: userId } = data;
-        if (!lat || !lon || !userId) {
-            return { status: 400, error: 'Missing required fields: lat, lon, id' };
-        }
-
-        const candidateIds = await getRestaurantIdsWithinDistance(pool, lat, lon, radiusKm, limit);
-
-        if (candidateIds.length === 0) {
-            return {
-                status: 200,
-                data: [],
-                metadata: {
-                    user_location: { lat, lng: lon },
-                    search_radius_km: radiusKm,
-                    candidates_considered: 0,
-                    recommendations_returned: 0
-                }
-            };
-        }
-
-        // Run Python recommender
-        const recommendedIds = await new Promise((resolve, reject) => {
-            const pythonProcess = spawn('python', [
-                '../recommender-system/src/main.py',
-                JSON.stringify(candidateIds),
-                userId.toString(),
-                numRecommendations.toString()
-            ]);
-
-            let stdout = '';
-            let stderr = '';
-
-            pythonProcess.stdout.on('data', d => stdout += d.toString());
-            pythonProcess.stderr.on('data', d => stderr += d.toString());
-
-            pythonProcess.on('close', code => {
-                if (code === 0) {
-                    try {
-                        resolve(JSON.parse(stdout.trim()));
-                    } catch (e) {
-                        reject(new Error(`Invalid JSON from Python: ${e.message}\nOutput: ${stdout}`));
-                    }
-                } else {
-                    reject(new Error(`Python exited with code ${code}: ${stderr}`));
-                }
-            });
-
-            pythonProcess.on('error', err => reject(err));
-        });
-
-        if (!Array.isArray(recommendedIds) || recommendedIds.length === 0) {
-            return {
-                status: 200,
-                data: [],
-                metadata: {
-                    user_location: { lat, lng: lon },
-                    search_radius_km: radiusKm,
-                    candidates_considered: candidateIds.length,
-                    recommendations_returned: 0
-                }
-            };
-        }
-
-        // Fetch recommended restaurants with proper field mapping
-        const query = `
-            SELECT 
-                r.id,
-                r.name,
-                r.restaurant_info->>'address' AS address,
-                r.restaurant_info->>'price' AS price_level,
-                r.restaurant_info->>'cuisine' AS cuisine,
-                r.restaurant_info->>'service_style' AS service_style,
-                r.restaurant_info->>'flavors' AS flavors,
-                (r.restaurant_info->>'lat')::float AS lat,
-                (r.restaurant_info->>'lon')::float AS lon,
-                (
-                    6371 * acos(
-                        cos(radians($1)) *
-                        cos(radians((r.restaurant_info->>'lat')::float)) *
-                        cos(radians((r.restaurant_info->>'lon')::float) - radians($2)) +
-                        sin(radians($1)) *
-                        sin(radians((r.restaurant_info->>'lat')::float))
-                    )
-                ) AS distance_km
-            FROM restaurants r
-            WHERE r.id = ANY($3::int[])
-            ORDER BY array_position($3::int[], r.id);
+        // 1. Get nearby restaurants
+        const nearbyQuery = `
+            SELECT id, name, address, price_level, cuisine, service_style, flavors, lat, lon,
+                   (6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lon) - radians($2)) +
+                   sin(radians($1)) * sin(radians(lat)))) AS distance_km
+            FROM restaurants
+            WHERE (6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lon) - radians($2)) +
+                   sin(radians($1)) * sin(radians(lat)))) <= $3
+            ORDER BY distance_km
+            LIMIT 50
         `;
 
-        const { rows } = await pool.query(query, [lat, lon, recommendedIds]);
+        const { rows } = await pool.query(nearbyQuery, [lat, lon, radiusKm]);
+        if (rows.length === 0) {
+            return { status: 200, data: [], metadata: { candidates_considered: 0 } };
+        }
 
-        const formatted = rows.map((row, index) => {
+        const candidateIds = rows.map(r => r.id);
+
+        // 2. Spawn Python recommender
+        const pythonProcess = spawn('python', [
+            '../recommender-system/src/main.py',
+            JSON.stringify(candidateIds),
+            userId.toString(),
+            numRecommendations.toString()
+        ]);
+
+        let stdoutData = '';
+        let stderrData = '';
+
+        pythonProcess.stdout.on('data', (data) => {
+            const text = data.toString();
+            stdoutData += text;
+            console.log('PYTHON STDOUT:', text.trim()); // Visible in Render logs
+        });
+
+        pythonProcess.stderr.on('data', (data) => {
+            const text = data.toString();
+            stderrData += text;
+            console.error('PYTHON STDERR:', text.trim()); // Critical errors
+        });
+
+        const pythonExit = new Promise((resolve, reject) => {
+            pythonProcess.on('close', (code) => {
+                if (code !== 0) {
+                    console.error('Python exited with code', code);
+                    console.error('STDERR:', stderrData);
+                    return reject(new Error(`Python error: ${stderrData || 'Unknown error'}`));
+                }
+
+                // CRITICAL FIX: Extract only the last valid JSON line
+                const lines = stdoutData.trim().split('\n');
+                let jsonLine = lines[lines.length - 1]; // Last line should be the JSON array
+
+                // Clean any trailing junk
+                const jsonMatch = jsonLine.match(/\[.*\]/);
+                if (!jsonMatch) {
+                    console.error('No JSON found in Python output:', stdoutData);
+                    return reject(new Error('Invalid JSON from Python'));
+                }
+
+                try {
+                    const recommendedIds = JSON.parse(jsonMatch[0]);
+                    resolve(recommendedIds);
+                } catch (parseErr) {
+                    console.error('JSON parse failed on:', jsonMatch[0]);
+                    reject(parseErr);
+                }
+            });
+        });
+
+        const recommendedIds = await pythonExit;
+
+        // 3. Sort final results by recommendation order
+        const recommendedRows = rows
+            .filter(row => recommendedIds.includes(row.id))
+            .sort((a, b) => recommendedIds.indexOf(a.id) - recommendedIds.indexOf(b.id));
+
+        const formatted = recommendedRows.map((row, index) => {
             const distanceKm = parseFloat(row.distance_km) || 0;
             const distanceMiles = distanceKm * 0.621371;
 
-            // Parse cuisine string into array
             let categories = [];
             if (row.cuisine) {
-                categories = row.cuisine
-                    .split(',')
-                    .map(c => c.trim())
-                    .filter(Boolean);
+                categories = row.cuisine.split(',').map(c => c.trim()).filter(Boolean);
             }
 
-            // Parse flavors if it's a JSON string (some might be stored as array string)
             let flavors = [];
             try {
                 if (row.flavors) {
@@ -360,7 +350,7 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
                 lon: parseFloat(row.lon) || 0,
                 distance_km: Number(distanceKm.toFixed(2)),
                 distance_miles: Number(distanceMiles.toFixed(2)),
-                recommendation_score: Number((9.5 - index * 0.15).toFixed(2)), // Realistic mock score
+                recommendation_score: Number((9.8 - index * 0.2).toFixed(2)),
                 rank: index + 1
             };
         });
@@ -381,7 +371,6 @@ export async function getRecommendations(token, pool, data, check_all, numRecomm
         return { status: 500, error: error.message || 'Internal recommendation error' };
     }
 }
-
 
 export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {
