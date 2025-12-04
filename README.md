@@ -1,5 +1,5 @@
 # YouChews
-
+A web app that helps users decide where to eat by saving user preferences with a like-dislike recommendation system
 # Python Environment
 Create a Python 3.14.0 virtual environment:  
 `python3.14 -m venv recommender-system`  
@@ -11,3 +11,4 @@ Install dependencies:
 # Node.js Environments
 For both the frontend (my-app) and backend (api-server), install the Node.js dependencies with
 `npm ci`
+
