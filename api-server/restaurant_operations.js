@@ -126,7 +126,6 @@ export async function uploadRestaurant(data, token, pool, check_all) {
       id: data.id,
       name: data.name,
       address: data.address,
-
       formatted_address: data.formatted_address,
       attributes: { service_type: data.service_type },
       menu: data.menu,
