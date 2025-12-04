@@ -124,13 +124,12 @@ app.post('/getrecommendations', async (req, res) => {
 
 app.post('/logPreference', async (req, res) => {
     if (!req.headers.authorization) {
-        return res.status(401).send({ error: 'Authorization header missing' });
+        return res.status(401).json({ error: 'Authorization header missing' });
     }
     const token = req.headers.authorization.split(' ')[1];
-    const result = await logPreference(req.body.res, token, pool, check_all);
-    res.status(result.status).send(result);
+    const result = await logPreference(req.body, token, pool, check_all);  // ← req.body, not req.body.res
+    res.status(result.status).json(result);
 });
-
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

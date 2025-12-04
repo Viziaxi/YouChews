@@ -263,7 +263,6 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
         const candidateIds = rows.map(r => r.id);
 
-        // Python recommender
         const pythonProcess = spawn('python', [
             '../recommender-system/src/main.py',
             JSON.stringify(candidateIds),
@@ -288,7 +287,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
             });
         });
 
-        // Format final results – everything from restaurant_info
+
         const ordered = rows
             .filter(r => recommendedIds.includes(r.id))
             .sort((a, b) => recommendedIds.indexOf(a.id) - recommendedIds.indexOf(b.id));
@@ -333,74 +332,75 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 }
 
 
-export async function logPreference(data,token,pool,check_all) {
-    if (!data || !data.id) {
-        return { status: 400, error: 'Missing required field: data.id' };
+export async function logPreference(body, token, pool, check_all) {
+    // body now has this shape: { res: { id, pref } }
+    const payload = body?.res;
+
+    if (!payload || !payload.id || !payload.pref) {
+        return { status: 400, error: 'Invalid payload: expected { res: { id, pref } }' };
     }
 
-    const check_authorization = await check_all('user', token);
-    if (check_authorization.status !== 200) {
-        return { status: check_authorization.status, error: check_authorization.message };
+    const userId = payload.id;
+    const preferences = payload.pref;
+
+    const auth = await check_all('user', token);
+    if (auth.status !== 200) {
+        return { status: auth.status, error: auth.message };
     }
 
-    const userId = data.id;
-    const res = await pool.query(
+    if (auth.user.id !== userId) {
+        return { status: 403, error: 'You can only update your own preferences' };
+    }
+
+    try {
+        const res = await pool.query(
             'SELECT user_preferences FROM users WHERE id = $1',
             [userId]
-    );
+        );
 
-    if (res.rows.length === 0) {
-        return { status: 404, error: 'User not found' };
-    }
+        if (res.rows.length === 0) {
+            return { status: 404, error: 'User not found' };
+        }
 
-    if(!data.pref){
-        return { status: 400, error: 'Missing required field: data.pref' };
-    }
+        let currentPrefs = res.rows[0].user_preferences || [];
 
-    try{
+        for (const pref of preferences) {
+            const { item_id, like_level, like_or_not } = pref;
 
-        let currentPrefs = res.rows[0].user_preferences || []; // list
-        for (let i = 0; i < data.pref.length; i++) {
-            const newPref = data.pref[i];
-            const { item_id, like_level ,like_or_not} = newPref; // like_level : int range 1 - 10; Like_or_not int range 1 or -1
-            if (!item_id){
-                console.warn('Missing item _id unable to find matches');
-                continue;
-            }
+            if (!item_id) continue;
 
-            let found = false;
+            const existing = currentPrefs.find(p => p.item_id === item_id);
 
-            for (let j = 0; j < currentPrefs.length; j++) {
-                if (currentPrefs[j].item_id === item_id) {
-                    if (like_level !== null){
-                        currentPrefs[j].like_level = Math.max(1, Math.min(10, (currentPrefs[j].like_level + like_level) / 2));
-
-                    }
-                    else {
-                        currentPrefs[j].like_level = Math.max(1, Math.min(10, currentPrefs[j].like_level + like_or_not));
-
-                    }
-                    found = true;
-                    break;
+            if (existing) {
+                // Update existing
+                if (like_level !== undefined && like_level !== null) {
+                    existing.like_level = Math.max(1, Math.min(10,
+                        (existing.like_level + like_level) / 2
+                    ));
+                } else if (like_or_not !== undefined) {
+                    existing.like_level = Math.max(1, Math.min(10,
+                        existing.like_level + like_or_not
+                    ));
                 }
-            }
-
-            if (!found) {
+            } else {
+                // Add new
                 currentPrefs.push({
-                  item_id,
-                  like_level: (like_level + 5) / 2
+                    item_id,
+                    like_level: like_level ? Math.max(1, Math.min(10, (like_level + 5) / 2)) : 6
                 });
             }
         }
+
         await pool.query(
             'UPDATE users SET user_preferences = $1::jsonb WHERE id = $2',
             [JSON.stringify(currentPrefs), userId]
         );
 
-        return { status: 200, message: 'User preferences updated successfully' };
+        return { status: 200, message: 'Preferences saved!', count: preferences.length };
+
     } catch (error) {
-        console.error(error);
-        return { status: 500, error: error.message };
+        console.error('logPreference error:', error);
+        return { status: 500, error: 'Failed to save preferences' };
     }
 }
 
