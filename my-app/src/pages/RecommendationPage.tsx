@@ -20,7 +20,7 @@ interface RecommendationData {
   name: string;
   address: string;
   formatted_address: string;
-  cuisine: string[]; // Assuming array, adjust if string
+  cuisine: string[];
   price_tier: number; // e.g., 1, 2, 3, 4
   lat: number;
   lon: number;
@@ -52,7 +52,6 @@ const RecommendationPage: React.FC = () => {
   );
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  // Renamed to 'currentRecId' to better reflect its purpose and avoid conflict
   const [currentRecId, setCurrentRecId] = useState<string>("");
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -75,6 +74,12 @@ const RecommendationPage: React.FC = () => {
         return; // Redirect to login logic would go here
       }
 
+      /*if (!navigator.geolocation) {
+        setError("Geolocation is not supported by your browser.");
+        setLoading(false);
+        return;
+      }*/
+
       setAuthToken(token);
 
       if (!storedUser) {
@@ -88,13 +93,31 @@ const RecommendationPage: React.FC = () => {
       const ideee = parseInt(user.id, 10);
       setUserId(ideee);
 
-      // Example: Times Square, New York
+      // Santa Clara's Coordinates
       const mockLat = 37.354107;
-      const mockLong = /*-*/ -121.955238;
+      const mockLong = -121.955238;
 
       console.log("Using Mock Location:", mockLat, mockLong);
 
       fetchRecommendations(token, mockLat, mockLong, ideee);
+
+      // --- CHANGE END ---
+
+      /*navigator.geolocation.getCurrentPosition(
+        (position) => {
+          fetchRecommendations(
+            token,
+            position.coords.latitude,
+            position.coords.longitude
+          );
+        },
+        (geoError) => {
+          setError(
+            "Unable to retrieve your location. Please allow location access."
+          );
+          setLoading(false);
+        }
+      );*/
     };
 
     initialize();
@@ -113,8 +136,8 @@ const RecommendationPage: React.FC = () => {
       id: ide,
     };
     try {
-      const response = await axios.post<ApiResponse>( // Use the correct response type
-        "https://youchews.onrender.com/getrecommendations", // Replace with your actual endpoint
+      const response = await axios.post<ApiResponse>(
+        "https://youchews.onrender.com/getrecommendations",
         payload,
         {
           headers: {
@@ -128,7 +151,6 @@ const RecommendationPage: React.FC = () => {
         setRecommendations(response.data.data);
         setMetadata(response.data.metadata);
 
-        // Ensure the ID of the first recommendation is set
         if (response.data.data.length > 0) {
           setCurrentRecId(response.data.data[0].id);
         }
@@ -155,14 +177,6 @@ const RecommendationPage: React.FC = () => {
 
     // *** Use the 'rating' state variable for the 'likeLevel' (1-5) ***
     const likeLevel = rating;
-
-    // The existing 'returnVal' structure is: [itemID (String), likeLevel (1-5), preferenceValue (1 or -1)]
-    // NOTE: The backend API you provided (responseState) uses a number array for pref.
-    // The item ID is a string, but the API type is number[]. I'll pass the ID as a string
-    // and rely on your backend to parse it or you may need to adjust the responseState type/API call.
-    // For now, I'll pass a number (assuming the backend ID is numeric despite the interface being string).
-
-    // Assuming backend takes the item ID as a number, which is a common inconsistency with JSON APIs
     const itemIDNumber = parseInt(currentItem.id, 10);
 
     const returnVal: number[] = [itemIDNumber, likeLevel, preferenceValue];
@@ -184,19 +198,15 @@ const RecommendationPage: React.FC = () => {
     }
 
     try {
-      // *** Updated POST call to logPreference with the correct payload structure (responseState) ***
       await axios.post("https://youchews.onrender.com/logPreference", payload, {
         headers: { Authorization: `Bearer ${authToken}` },
       });
-      // Optional: Handle response if needed
     } catch (err) {
       console.error("Failed to log preference", err);
-      // Optional: Revert index or show toast notification on error
-      // setCurrentIndex(currentIndex); // Example of reverting on error
     }
   };
 
-  // --- Helper to render Price Tier (Unchanged) ---
+  // --- Helper to render Price Tier
   const renderPrice = (tier: number) => {
     return "$".repeat(tier) || "$"; // Default to $ if 0/null
   };
@@ -378,7 +388,7 @@ const RecommendationPage: React.FC = () => {
         </div>
       </div>
       <Link
-        to="/login" // Replace '/target-page' with your actual destination path
+        to="/login"
         className="absolute bottom-10 text-black hover:text-black-700 transition duration-150"
       >
         Log Out
