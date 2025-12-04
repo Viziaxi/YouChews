@@ -12,14 +12,16 @@ from contentbasedsystem import find_next
 # Helper: Connect to Render PostgreSQL using DATABASE_URL
 # --------------------------------------------------------------
 def connect_database():
-    conn_string = 'postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a/youchews_db_xoi5'
+    conn_string = os.getenv('DATABASE_URL')
     if not conn_string:
-        print("ERROR: DATABASE_URL environment variable is missing!", file=sys.stderr)
-        sys.exit(1)
+        # Fallback to hard-coded internal (for local testing only – remove in prod!)
+        conn_string = 'postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a:5432/youchews_db_xoi5'
+        print("WARNING: Using fallback hard-coded DATABASE_URL – set env var in Render!")
 
     print(f"Connecting to database... ({conn_string.split('@')[1].split('/')[0]})")
     try:
-        conn = psycopg2.connect(conn_string, sslmode='require')
+        # NO sslmode for internal connections!
+        conn = psycopg2.connect(conn_string)
         print("Successfully connected to PostgreSQL on Render")
         return conn
     except Exception as e:
@@ -28,7 +30,7 @@ def connect_database():
 
 
 # --------------------------------------------------------------
-# Main recommendation logic
+# Main recommendation logic (unchanged)
 # --------------------------------------------------------------
 def execute_from_args():
     print(f"Python process started. Args: {sys.argv}")
