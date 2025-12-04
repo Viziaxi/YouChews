@@ -30,7 +30,6 @@ async function check_integrity(data , token, check_all) {
         'name',
         'id',
         'address',
-        'categories',
         'service_type',
         'menu',
         'flavors'
@@ -122,26 +121,22 @@ export async function uploadRestaurant(data, token, pool, check_all) {
     data.formatted_address = geo.formattedAddress;
 
     // Normalize field names to align with restaurants.restaurant_info structure
-    // - Use "categories" instead of "cuisine"
     // - Store service type under "attributes"
     const normalized = {
-        name: data.name,
-        address: data.address,
-        formatted_address: data.formatted_address || data.address,
-        lat: data.lat,
-        lon: data.lon,
-        menu: data.menu,
-        cuisine: Array.isArray(data.categories)
-            ? data.categories.join(', ')
-            : data.categories || '',
-        flavors: data.flavors || [],
-        service_style: data.service_type || 'Sit-down',
-        price: data.price || '$'
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      formatted_address: data.formatted_address,
+      attributes: { service_type: data.service_type },
+      menu: data.menu,
+      flavors: data.flavors,
+      lat: data.lat,
+      lon: data.lon,
     };
 
     await pool.query(
-        'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
-        [JSON.stringify(normalized), data.id]
+      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
+      [JSON.stringify(normalized), data.id]
     );
 
     return { status: 200, message: 'Successfully inserted to queue' };
