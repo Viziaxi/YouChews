@@ -156,7 +156,7 @@ export async function adminLogin({ name, password }, pool) {
         }
 
         const admin = admins.rows[0];
-        const check_password = (password === admin.password); // Not secure leave here for now
+        const check_password = (password === admin.password);
         if (!check_password) {
             return { status: 401, error: 'Username or Passwords do not match' };
         }
@@ -179,260 +179,188 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
-export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
-    {
-        if (!userLat || !userLon) {
-            throw new Error("Latitude and longitude are required");
-        }
+export async function getRecommendations(token, pool, body, check_all, numRecommendations = 10) {
+    const auth = await check_all('user', token);
+    if (auth.status !== 200) {
+        return { status: auth.status, error: auth.message };
+    }
 
-        const query = `
-            SELECT id,
-                   (6371 * acos(
-                           cos(radians($1)) *
-                           cos(radians((restaurant_info ->>'lat'):: float)) *
-                           cos(radians((restaurant_info ->>'lon'):: float) - radians($2)) +
-                           sin(radians($1)) *
-                           sin(radians((restaurant_info ->>'lat'):: float))
-                           )) AS distance_km
+    const userId = auth.user.id;
+    const { lat, lon } = body;
+    if (!lat || !lon) {
+        return { status: 400, error: 'Latitude and longitude are required' };
+    }
+
+    const radiusKm = 10;
+
+    try {// query and calculate and get restaurant within certain radius
+        const nearbyQuery = `
+            SELECT 
+                id,
+                name,
+                restaurant_info,
+                (6371 * acos(
+                    cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) * 
+                    cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
+                    sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
+                )) AS distance_km
             FROM restaurants
-            WHERE restaurant_info ? 'lat'
-      AND restaurant_info ? 'lon'
-      AND (restaurant_info->>'lat')::float IS NOT NULL
-      AND (restaurant_info->>'lon')::float IS NOT NULL
-            HAVING (6371 * acos(
-                cos(radians($1)) *
-                cos(radians((restaurant_info->>'lat'):: float)) *
-                cos(radians((restaurant_info->>'lon'):: float) - radians($2)) +
-                sin(radians($1)) *
-                sin(radians((restaurant_info->>'lat'):: float))
-                )) <= $3
-            ORDER BY distance_km ASC
-                LIMIT $4;
+            WHERE restaurant_info ? 'lat' 
+              AND restaurant_info ? 'lon'
+              AND (restaurant_info->>'lat')::float IS NOT NULL
+              AND (restaurant_info->>'lon')::float IS NOT NULL
+              AND (6371 * acos(
+                  cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) * 
+                  cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
+                  sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
+              )) <= $3
+            ORDER BY distance_km
+            LIMIT 50
         `;
 
-        try {
-            const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
-            return rows.map(row => row.id); // ← only IDs
-        } catch (error) {
-            console.error("Failed to get nearby restaurant IDs:", error);
-            throw error;
-        }
-    }
-}
+        const { rows } = await pool.query(nearbyQuery, [lat, lon, radiusKm]);
 
-export async function getRecommendations(token, pool, data, check_all, numRecommendations, radiusKm = 10, limit = 50) {
-    try {
-        const check_authorization = await check_all('user', token);
-        if (check_authorization.status !== 200) {
-            return {status: check_authorization.status, error: check_authorization.message};
+        if (rows.length === 0) {
+            return { status: 200, data: [], metadata: { candidates_considered: 0 } };
         }
 
-        if (!data.lon || !data.lat || !data.id) {
-            return {status: 400, error: 'Missing required field'};
-        }
+        const candidateIds = rows.map(r => r.id);
+        // invoke python recommender
+        const pythonProcess = spawn('python', [
+            '../recommender-system/src/main.py',
+            JSON.stringify(candidateIds),
+            userId.toString(),
+            numRecommendations.toString()
+        ]);
 
-        const restaurant_idList = getRestaurantIdsWithinDistance(pool, data.lat, data.lon, radiusKm, limit);
+        let stdoutData = '';
+        pythonProcess.stdout.on('data', d => stdoutData += d.toString());
+        pythonProcess.stderr.on('data', d => console.error('PYTHON:', d.toString()));
 
-        if (restaurant_idList.length === 0) {
-            return {status: 200, message: "No restaurant nearby."}; // no restaurants nearby → empty recommendations
-        }
-
-        const userId = data.id;
-        const res = await pool.query(
-            'SELECT user_preferences FROM users WHERE id = $1',
-            [userId]
-        );
-        if (res.rows.length === 0) {
-            return {status: 404, error: 'User not found'};
-        }
-
-        const runPython = new Promise((resolve, reject) => {
-            const pythonProcess = spawn('python', [
-                '../recommender-system/src/main.py',
-                JSON.stringify(restaurant_idList), //  may not need to be stringify
-                userId,
-                numRecommendations
-            ]);
-
-            let stdoutData = '';
-            let stderrData = '';
-
-            pythonProcess.stdout.on('data', (data) => {
-                stdoutData += data.toString();
-            });
-
-            pythonProcess.stderr.on('data', (data) => {
-                stderrData += data.toString();
-            });
-
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdoutData);
-                        resolve(result);
-                    } catch (parseError) {
-                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
-                    }
-                } else {
-                    reject(new Error(`Python process failed: ${stderrData}`));
+        const recommendedIds = await new Promise((resolve, reject) => {
+            pythonProcess.on('close', code => {
+                if (code !== 0) return reject(new Error('Python failed'));
+                const match = stdoutData.trim().match(/\[.*\]/);
+                if (!match) return reject(new Error('No JSON from Python'));
+                try {
+                    resolve(JSON.parse(match[0]));
+                } catch (e) {
+                    reject(e);
                 }
-            });
-
-            pythonProcess.on('error', (error) => {
-                reject(new Error(`Failed to spawn Python process: ${error.message}`));
             });
         });
 
-        const recommendations = await runPython;
-        return {status: 200, data: recommendations};
+
+        const ordered = rows
+            .filter(r => recommendedIds.includes(r.id))
+            .sort((a, b) => recommendedIds.indexOf(a.id) - recommendedIds.indexOf(b.id));
+
+        const formatted = ordered.map((row, i) => {
+            const info = row.restaurant_info || {};
+            const distKm = parseFloat(row.distance_km) || 0;
+
+            return {
+                id: row.id.toString(),
+                name: row.name || 'Unknown',
+                address: info.address || 'No address',
+                price_level: info.price || '$',
+                categories: info.cuisine ? (Array.isArray(info.cuisine) ? info.cuisine : info.cuisine.split(',').map(s => s.trim())) : [],
+                service_style: info.service_style || 'Casual',
+                flavors: Array.isArray(info.flavors) ? info.flavors : [],
+                menu: Array.isArray(info.menu) ? info.menu : [],
+                lat: parseFloat(info.lat) || 0,
+                lon: parseFloat(info.lon) || 0,
+                distance_km: Number(distKm.toFixed(2)),
+                distance_miles: Number((distKm * 0.621371).toFixed(2)),
+                recommendation_score: Number((9.9 - i * 0.2).toFixed(2)),
+                rank: i + 1
+            };
+        });
+        //return recommended restaurant
+        return {
+            status: 200,
+            data: formatted,
+            metadata: {
+                user_location: { lat, lng: lon },
+                search_radius_km: radiusKm,
+                candidates_considered: candidateIds.length,
+                recommendations_returned: formatted.length
+            }
+        };
 
     } catch (error) {
-        console.error('Error in getRecommendations:', error);
-        return {status: 500, error: error.message};
+        console.error('getRecommendations error:', error);
+        return { status: 500, error: error.message || 'Server error' };
     }
 }
 
-/*
-export async function getRecommendations(token, pool, data,check_all,numRecommendations) {
-    try {
-        const check_authorization = await check_all('user', token);
-        if (check_authorization.status !== 200) {
-            return { status: check_authorization.status, error: check_authorization.message };
-        }
+export async function logPreference(body, token, pool, check_all) {
+    const payload = body?.res;
 
-        if (!data || !data.id) {
-            return { status: 400, error: 'Missing required field: data.id' };
-        }
-        const userId = data.id;
+    if (!payload || !payload.id || !payload.pref) {
+        return { status: 400, error: 'Invalid payload: expected { res: { id, pref } }' };
+    }
+
+    const userId = payload.id;
+    const preferences = payload.pref;
+
+    const auth = await check_all('user', token);
+    if (auth.status !== 200) {
+        return { status: auth.status, error: auth.message };
+    }
+
+    if (auth.user.id !== userId) {
+        return { status: 403, error: 'Not your own preferences' };
+    }
+
+    try {
         const res = await pool.query(
             'SELECT user_preferences FROM users WHERE id = $1',
             [userId]
         );
+
         if (res.rows.length === 0) {
             return { status: 404, error: 'User not found' };
         }
-        const contentRes = await pool.query(
-            `SELECT id FROM restaurants;`
-        );
 
-        const idList = contentRes.rows.map(r => r.id);
+        let currentPrefs = res.rows[0].user_preferences || [];
 
-        const runPython = new Promise((resolve, reject) => {
-            const pythonProcess = spawn('python', [
-                '../recommender-system/src/main.py',
-                idList,
-                userId,
-                numRecommendations
-            ]);
+        for (const pref of preferences) {
+            const { item_id, like_level, like_or_not } = pref;
 
-            let stdoutData = '';
-            let stderrData = '';
+            if (!item_id) continue;
 
-            pythonProcess.stdout.on('data', (data) => {
-                stdoutData += data.toString();
-            });
-
-            pythonProcess.stderr.on('data', (data) => {
-                stderrData += data.toString();
-            });
-
-            pythonProcess.on('close', (code) => {
-                if (code === 0) {
-                    try {
-                        const result = JSON.parse(stdoutData);
-                        resolve(result);
-                    } catch (parseError) {
-                        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
-                    }
-                } else {
-                    reject(new Error(`Python process failed: ${stderrData}`));
+            const existing = currentPrefs.find(p => p.item_id === item_id);
+            //calculating user preference, by add curr + new //2 max 10 or -10
+            if (existing) {
+                if (like_level !== undefined && like_level !== null) {
+                    existing.like_level = Math.max(1, Math.min(10,
+                        (existing.like_level + like_level) / 2
+                    ));
+                } else if (like_or_not !== undefined) {
+                    existing.like_level = Math.max(1, Math.min(10,
+                        existing.like_level + like_or_not
+                    ));
                 }
-            });
+            } else {
 
-            pythonProcess.on('error', (error) => {
-                reject(new Error(`Failed to spawn Python process: ${error.message}`));
-            });
-        });
-
-        const recommendations = await runPython;
-        return { status: 200, data: recommendations };
-
-    } catch (error) {
-        console.error('Error in getRecommendations:', error);
-        return { status: 500, error: error.message };
-    }
-}
-*/
-
-
-export async function logPreference(data,token,pool,check_all) {
-    if (!data || !data.id) {
-        return { status: 400, error: 'Missing required field: data.id' };
-    }
-
-    const check_authorization = await check_all('user', token);
-    if (check_authorization.status !== 200) {
-        return { status: check_authorization.status, error: check_authorization.message };
-    }
-
-    const userId = data.id;
-    const res = await pool.query(
-            'SELECT user_preferences FROM users WHERE id = $1',
-            [userId]
-    );
-
-    if (res.rows.length === 0) {
-        return { status: 404, error: 'User not found' };
-    }
-
-    if(!data.pref){
-        return { status: 400, error: 'Missing required field: data.pref' };
-    }
-
-    try{
-
-        let currentPrefs = res.rows[0].user_preferences || []; // list
-        for (let i = 0; i < data.pref.length; i++) {
-            const newPref = data.pref[i];
-            const { item_id, like_level ,like_or_not} = newPref; // like_level : int range 1 - 10; Like_or_not int range 1 or -1
-            if (!item_id){
-                console.warn('Missing item _id unable to find matches');
-                continue;
-            }
-
-            let found = false;
-
-            for (let j = 0; j < currentPrefs.length; j++) {
-                if (currentPrefs[j].item_id === item_id) {
-                    if (like_level !== null){
-                        currentPrefs[j].like_level = Math.max(1, Math.min(10, (currentPrefs[j].like_level + like_level) / 2));
-
-                    }
-                    else {
-                        currentPrefs[j].like_level = Math.max(1, Math.min(10, currentPrefs[j].like_level + like_or_not));
-
-                    }
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
                 currentPrefs.push({
-                  item_id,
-                  like_level: (like_level + 5) / 2
+                    item_id,
+                    like_level: like_level ? Math.max(1, Math.min(10, (like_level + 5) / 2)) : 6
                 });
             }
         }
+
         await pool.query(
             'UPDATE users SET user_preferences = $1::jsonb WHERE id = $2',
             [JSON.stringify(currentPrefs), userId]
         );
 
-        return { status: 200, message: 'User preferences updated successfully' };
+        return { status: 200, message: 'Preferences saved!', count: preferences.length };
+
     } catch (error) {
-        console.error(error);
-        return { status: 500, error: error.message };
+        console.error('logPreference error:', error);
+        return { status: 500, error: 'Failed to save preferences' };
     }
 }
 

@@ -16,7 +16,7 @@ export default function Login({ userType = "user" }) {
       title: "Welcome Back",
       endpoint: "/login",
       bgColor: "bg-yellow-100",
-      successRedirect: "/recommendertest",
+      successRedirect: "/recommender",
       registerPath: "/register",
     },
     restaurant: {
@@ -30,7 +30,7 @@ export default function Login({ userType = "user" }) {
       title: "Admin Login",
       endpoint: "/admin_login",
       bgColor: "bg-purple-100",
-      successRedirect: "/placeholder",
+      successRedirect: "/admin",
       registerPath: null,
     },
   };

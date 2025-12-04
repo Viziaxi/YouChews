@@ -5,6 +5,7 @@ import Placeholder from "./pages/test_page.jsx";
 import RecommendationPage from './pages/RecommendationPage.tsx';
 import UploadRestaurantPage from './pages/UploadRestaurant.tsx';
 import RecommendationPageTest from './pages/RecommendationPageTest.tsx';
+import AdminQueuePage from './pages/AdminQueuePage.tsx';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/placeholder" element={<Placeholder />} />
         <Route path="/recommender" element={<RecommendationPage />} />
         <Route path="/recommendertest" element={<RecommendationPageTest />} />
+        <Route path="/admin" element={<AdminQueuePage />} />
 
         <Route path="/register" element={<Register userType="user" />} />
         <Route path="/restaurant_register" element={<Register userType="restaurant" />} />

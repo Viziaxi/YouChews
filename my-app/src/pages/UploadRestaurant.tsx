@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent } from "react";
 import axios from "axios";
+import { Link } from "react-router-dom";
 
 // Define the structure of the data we're sending to the backend
 interface RestaurantData {
@@ -7,7 +8,7 @@ interface RestaurantData {
   id: string;
   address: string;
   cuisine: string;
-  service_style: string;
+  service_type: string;
   menu: string[]; // Array of strings
   price: number;
   flavors: string[]; // Array of strings
@@ -19,7 +20,7 @@ interface UploadState {
   id: string;
   address: string;
   cuisine: string;
-  service_style: string;
+  service_type: string;
   menuInput: string; // Comma-separated string input for menu
   price: number | ""; // Use '' for initial empty state
   flavorsInput: string; // Comma-separated string input for flavors
@@ -39,14 +40,14 @@ const UploadRestaurantPage: React.FC = () => {
     id: "",
     address: "",
     cuisine: "",
-    service_style: "",
+    service_type: "",
     menuInput: "",
     price: "",
     flavorsInput: "",
   });
   const [message, setMessage] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const backendUrl = "https://youchews.onrender.com/upload_restaurant"; // Update this if your backend is on a different domain/port
+  const backendUrl = "https://youchews.onrender.com/upload_restaurant";
 
   // 1. Check for token on component mount
   useEffect(() => {
@@ -99,7 +100,7 @@ const UploadRestaurantPage: React.FC = () => {
       id: idee,
       address: formData.address,
       cuisine: formData.cuisine,
-      service_style: formData.service_style,
+      service_type: formData.service_type,
       // Split by comma, trim whitespace, and filter out empty strings
       menu: formData.menuInput
         .split(",")
@@ -255,16 +256,16 @@ const UploadRestaurantPage: React.FC = () => {
             </div>
             <div>
               <label
-                htmlFor="service_style"
+                htmlFor="service_type"
                 className="block text-sm font-medium text-gray-700"
               >
-                Service Style
+                Service Type
               </label>
               <input
                 type="text"
-                id="service_style"
-                name="service_style"
-                value={formData.service_style}
+                id="service_type"
+                name="service_type"
+                value={formData.service_type}
                 onChange={handleChange}
                 required
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500"
@@ -364,6 +365,12 @@ const UploadRestaurantPage: React.FC = () => {
           )}
         </form>
       </div>
+      <Link
+        to="/login"
+        className="absolute bottom-10 text-black hover:text-black-700 transition duration-150"
+      >
+        Log Out
+      </Link>
     </div>
   );
 };

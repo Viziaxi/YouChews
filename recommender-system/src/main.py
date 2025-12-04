@@ -1,97 +1,97 @@
-import pandas as pd
-import numpy as np
+# recommender-system/src/main.py
+
+import json
 import sys
-import json
-import configparser
-import pathlib
+import os
 import psycopg2
-import json
-
-import contentbasedsystem
-
-CONFIG_PATH = pathlib.Path(__file__).parent / "config.ini"
-TEST_PATH = pathlib.Path(__file__).parent / "testdata"
+import pandas as pd
+from contentbasedsystem import find_next
 
 def connect_database():
+    conn_string = os.getenv('DATABASE_URL')
+    if not conn_string:
+        conn_string = 'postgresql://youchews_db_xoi5_user:zptvD9AU0HjAEbhKJEirMxV7IvOovRWn@dpg-d4d7euf5r7bs73aqdnf0-a:5432/youchews_db_xoi5'
+        print("WARNING: Using fallback DATABASE_URL", file=sys.stderr)
+
     try:
-        return psycopg2.connect(
-            database="postgres",
-            user="postgres",
-            password="12345678",
-            host="localhost",
-            port=5432,
-        )
-    except:
-        return False
+        conn = psycopg2.connect(conn_string)
+        print("Connected to DB", file=sys.stderr)
+        return conn
+    except Exception as e:
+        print(f"DB connection failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
-def use_testdata(count: int) -> list[int]:
-    restaurants = pd.read_csv((TEST_PATH / "restaurants.csv").resolve(), quotechar='"', index_col=False)
-    userdata = pd.read_csv((TEST_PATH / "userdata.csv").resolve(), quotechar='"', index_col=False)
-    return contentbasedsystem.find_next(restaurants, userdata, count)
+def execute_from_args():
+    if len(sys.argv) != 4:
+        print("ERROR: Expected 3 args", file=sys.stderr)
+        sys.exit(1)
 
-def execute_from_args(connection) -> list[int]:
-    restaurant_ids = json.loads(sys.argv[1])
-    user_id = int(sys.argv[2])
-    item_count = int(sys.argv[3])
+    try:
+        restaurant_ids = json.loads(sys.argv[1])
+        user_id = int(sys.argv[2])
+        item_count = int(sys.argv[3])
+    except Exception as e:
+        print(f"Arg parse error: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    content_rows: list[tuple]
-    content_columns: list[str]
-    userdata_rows: list[tuple]
+    print(f"Processing {len(restaurant_ids)} candidates for user {user_id}", file=sys.stderr)
 
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM restaurants WHERE id = ANY(%s)", (restaurant_ids,))
-        content_columns = [desc[0] for desc in cursor.description]
-        content_rows = cursor.fetchall()
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT user_preferences FROM users WHERE id = %s", (user_id,))
-        userdata_rows = cursor.fetchall()
-    
-    restaurant_table = pd.DataFrame(content_rows, columns=content_columns)
-    content = pd.DataFrame(restaurant_table["restaurant_info"].to_list())
-    content["id"] = restaurant_table["id"]
+    conn = connect_database()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name, restaurant_info 
+                FROM restaurants 
+                WHERE id = ANY(%s)
+            """, (restaurant_ids,))
+            rows = cur.fetchall()
 
-    userdata = pd.DataFrame(userdata_rows[0][0])
+        if not rows:
+            print("No restaurants found", file=sys.stderr)
+            return []
 
-    return contentbasedsystem.find_next(content, userdata, item_count)
+        # Build DataFrame directly from JSONB
+        df = pd.DataFrame([
+            {
+                "id": row[0],
+                "name": row[1],
+                **row[2]  # Unpack all keys from restaurant_info
+            }
+            for row in rows
+        ])
 
-class NpEncoder(json.JSONEncoder):
-    def default(self, o):
-        if isinstance(o, np.integer):
-            return int(o)
-        if isinstance(o, np.floating):
-            return float(o)
-        if isinstance(o, np.ndarray):
-            return o.tolist()
-        return super(NpEncoder, self).default(o)
+        print(f"Fetched {len(df)} restaurants", file=sys.stderr)
 
-def main():
-    if not CONFIG_PATH.resolve().exists():
-        config = configparser.ConfigParser()
-        config["Debug"] = {
-            "use_test_csv": "False",
-            "test_return_count": "2",
-        }
+        # Extract user preferences
+        with conn.cursor() as cur:
+            cur.execute("SELECT user_preferences FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            user_prefs = row[0] if row and row[0] else []
 
-        with open(CONFIG_PATH.resolve(), 'w') as configfile:
-            config.write(configfile)
-    
-    config = configparser.ConfigParser()
-    config.read(CONFIG_PATH.resolve())
-    id_list = None
+        if not user_prefs:
+            print("No preferences → returning top by proximity", file=sys.stderr)
+            return [int(x) for x in restaurant_ids[:item_count]]
 
-    if config["Debug"]["use_test_csv"] == "True":
-        id_list = use_testdata(int(config["Debug"]["test_return_count"]))
-    else:
-        connection = connect_database()
-        if connection:
-            id_list = execute_from_args(connection)
-            connection.close()
-        else:
-            print("Unable to connect to database")
-    
-    print(json.dumps(id_list, cls=NpEncoder))
-    sys.stdout.flush()
-    sys.exit(0)
+        userdata = pd.DataFrame(user_prefs)
+        print(f"User has {len(userdata)} liked items", file=sys.stderr)
 
+        # Run recommender
+        recommended_ids = find_next(df, userdata, item_count)
+        print(f"Recommended: {recommended_ids}", file=sys.stderr)
+        return recommended_ids
+
+    except Exception as e:
+        print(f"Recommendation error: {e}", file=sys.stderr)
+        raise
+    finally:
+        conn.close()
+
+# FINAL OUTPUT: ONLY JSON ON STDOUT
 if __name__ == "__main__":
-    main()
+    try:
+        result = execute_from_args()
+        print(json.dumps(result))
+        sys.stdout.flush()
+    except Exception as e:
+        print(json.dumps({"error": str(e)}), file=sys.stderr)
+        sys.exit(1)
