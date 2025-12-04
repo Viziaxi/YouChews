@@ -90,7 +90,7 @@ const RecommendationPage: React.FC = () => {
 
       // Example: Times Square, New York
       const mockLat = 37.354107;
-      const mockLong = /*-*/ 121.955238;
+      const mockLong = /*-*/ -121.955238;
 
       console.log("Using Mock Location:", mockLat, mockLong);
 
