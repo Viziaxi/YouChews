@@ -333,7 +333,6 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
 
 export async function logPreference(body, token, pool, check_all) {
-    // body now has this shape: { res: { id, pref } }
     const payload = body?.res;
 
     if (!payload || !payload.id || !payload.pref) {
