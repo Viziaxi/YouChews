@@ -238,26 +238,32 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
     const radiusKm = 10;
 
     try {
-        // 1. Get nearby restaurants
+        // PERFECT QUERY FOR YOUR ACTUAL SCHEMA
         const nearbyQuery = `
-            SELECT id, name, address, price_level, cuisine, service_style, flavors, lat, lon,
-                   (6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lon) - radians($2)) +
-                   sin(radians($1)) * sin(radians(lat)))) AS distance_km
-            FROM restaurants
-            WHERE (6371 * acos(cos(radians($1)) * cos(radians(lat)) * cos(radians(lon) - radians($2)) +
-                   sin(radians($1)) * sin(radians(lat)))) <= $3
+            SELECT 
+                r.id,
+                r.name,
+                r.restaurant_info,
+                r.lat,
+                r.lon,
+                (6371 * acos(cos(radians($1)) * cos(radians(r.lat)) * cos(radians(r.lon) - radians($2)) +
+                       sin(radians($1)) * sin(radians(r.lat)))) AS distance_km
+            FROM restaurants r
+            WHERE (6371 * acos(cos(radians($1)) * cos(radians(r.lat)) * cos(radians(r.lon) - radians($2)) +
+                   sin(radians($1)) * sin(radians(r.lat)))) <= $3
             ORDER BY distance_km
             LIMIT 50
         `;
 
         const { rows } = await pool.query(nearbyQuery, [lat, lon, radiusKm]);
+
         if (rows.length === 0) {
             return { status: 200, data: [], metadata: { candidates_considered: 0 } };
         }
 
         const candidateIds = rows.map(r => r.id);
 
-        // 2. Spawn Python recommender
+        // Python recommender (already fixed – just works)
         const pythonProcess = spawn('python', [
             '../recommender-system/src/main.py',
             JSON.stringify(candidateIds),
@@ -268,89 +274,52 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
         let stdoutData = '';
         let stderrData = '';
 
-        pythonProcess.stdout.on('data', (data) => {
-            const text = data.toString();
-            stdoutData += text;
-            console.log('PYTHON STDOUT:', text.trim()); // Visible in Render logs
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            const text = data.toString();
-            stderrData += text;
-            console.error('PYTHON STDERR:', text.trim()); // Critical errors
-        });
+        pythonProcess.stdout.on('data', (data) => stdoutData += data.toString());
+        pythonProcess.stderr.on('data', (data) => stderrData += data.toString());
 
         const pythonExit = new Promise((resolve, reject) => {
             pythonProcess.on('close', (code) => {
                 if (code !== 0) {
-                    console.error('Python exited with code', code);
-                    console.error('STDERR:', stderrData);
-                    return reject(new Error(`Python error: ${stderrData || 'Unknown error'}`));
+                    return reject(new Error(stderrData || 'Python crashed'));
                 }
-
-                // CRITICAL FIX: Extract only the last valid JSON line
                 const lines = stdoutData.trim().split('\n');
-                let jsonLine = lines[lines.length - 1]; // Last line should be the JSON array
-
-                // Clean any trailing junk
-                const jsonMatch = jsonLine.match(/\[.*\]/);
-                if (!jsonMatch) {
-                    console.error('No JSON found in Python output:', stdoutData);
-                    return reject(new Error('Invalid JSON from Python'));
-                }
-
+                const lastLine = lines[lines.length - 1];
+                const match = lastLine.match(/\[.*\]/);
+                if (!match) return reject(new Error('No JSON from Python'));
                 try {
-                    const recommendedIds = JSON.parse(jsonMatch[0]);
-                    resolve(recommendedIds);
-                } catch (parseErr) {
-                    console.error('JSON parse failed on:', jsonMatch[0]);
-                    reject(parseErr);
+                    resolve(JSON.parse(match[0]));
+                } catch (e) {
+                    reject(e);
                 }
             });
         });
 
         const recommendedIds = await pythonExit;
 
-        // 3. Sort final results by recommendation order
+        // FINAL FORMATTING – reads from restaurant_info JSONB
         const recommendedRows = rows
             .filter(row => recommendedIds.includes(row.id))
             .sort((a, b) => recommendedIds.indexOf(a.id) - recommendedIds.indexOf(b.id));
 
         const formatted = recommendedRows.map((row, index) => {
+            const info = row.restaurant_info || {};
             const distanceKm = parseFloat(row.distance_km) || 0;
             const distanceMiles = distanceKm * 0.621371;
-
-            let categories = [];
-            if (row.cuisine) {
-                categories = row.cuisine.split(',').map(c => c.trim()).filter(Boolean);
-            }
-
-            let flavors = [];
-            try {
-                if (row.flavors) {
-                    flavors = typeof row.flavors === 'string'
-                        ? JSON.parse(row.flavors)
-                        : (Array.isArray(row.flavors) ? row.flavors : [row.flavors]);
-                }
-            } catch {
-                if (typeof row.flavors === 'string') {
-                    flavors = row.flavors.split(',').map(f => f.trim().replace(/[\[\]"]+/g, ''));
-                }
-            }
 
             return {
                 id: row.id.toString(),
                 name: row.name || 'Unknown Restaurant',
-                address: row.address || '',
-                price_level: row.price_level || '$',
-                categories,
-                service_style: row.service_style || 'Unknown',
-                flavors,
+                address: info.address || 'No address',
+                price_level: info.price || '$',
+                categories: Array.isArray(info.cuisine) ? info.cuisine : (info.cuisine ? info.cuisine.split(',') : []),
+                service_style: info.service_style || 'Casual',
+                flavors: Array.isArray(info.flavors) ? info.flavors : [],
+                menu: Array.isArray(info.menu) ? info.menu : [],
                 lat: parseFloat(row.lat) || 0,
                 lon: parseFloat(row.lon) || 0,
                 distance_km: Number(distanceKm.toFixed(2)),
                 distance_miles: Number(distanceMiles.toFixed(2)),
-                recommendation_score: Number((9.8 - index * 0.2).toFixed(2)),
+                recommendation_score: Number((9.9 - index * 0.15).toFixed(2)),
                 rank: index + 1
             };
         });
@@ -368,7 +337,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
     } catch (error) {
         console.error('getRecommendations error:', error);
-        return { status: 500, error: error.message || 'Internal recommendation error' };
+        return { status: 500, error: error.message || 'Internal error' };
     }
 }
 
