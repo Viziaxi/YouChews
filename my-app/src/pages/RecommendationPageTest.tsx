@@ -100,7 +100,6 @@ const RecommendationPageTest: React.FC = () => {
       // Call fetch directly, skipping navigator.geolocation
       //fetchRecommendations(token, mockLat, mockLong, ideee);
 
-      // --- CHANGE END ---
       setLoading(false);
       setCurrentIndex(200);
 
@@ -132,7 +131,7 @@ const RecommendationPageTest: React.FC = () => {
     ide: number
   ) => {
     const payload: UploadState = {
-      token: Utoken, // This is your string token
+      token: Utoken,
       data: {
         // This is the 'data' object requested by the backend
         lon: long,
@@ -142,7 +141,7 @@ const RecommendationPageTest: React.FC = () => {
     };
     try {
       const response = await axios.post(
-        "https://youchews.onrender.com/getrecommendations", // Replace with your actual endpoint
+        "https://youchews.onrender.com/getrecommendations",
         payload,
         {
           headers: {
