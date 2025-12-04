@@ -43,6 +43,7 @@ app.get('/', (req, res) => {
     res.status(200).send('API Server is Running');
 });
 
+
 app.post('/register', async (req, res) => {
     const result = await registerUser(req.body, pool);
     res.status(result.status).send(result);
@@ -67,7 +68,7 @@ app.post('/admin_login', async (req, res) => {
     const result = await adminLogin(req.body, pool);
     res.status(result.status).send(result);
 });
-
+// manage queue by admin
 app.post('/manage_queue', async (req, res) => {
     if (!req.headers.authorization) {
         return res.status(401).send({ error: 'Authorization header missing' });
@@ -127,7 +128,7 @@ app.post('/logPreference', async (req, res) => {
         return res.status(401).json({ error: 'Authorization header missing' });
     }
     const token = req.headers.authorization.split(' ')[1];
-    const result = await logPreference(req.body, token, pool, check_all);  // ← req.body, not req.body.res
+    const result = await logPreference(req.body, token, pool, check_all);
     res.status(result.status).json(result);
 });
 

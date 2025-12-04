@@ -1,4 +1,4 @@
-
+// button component used by botton
 import React from "react";
 
 const Button = ({
@@ -10,11 +10,9 @@ const Button = ({
   size = "md",
   className = "",
 }) => {
-  // Base classes
   const baseClasses =
     "font-medium rounded-lg transition-all duration-200 ease-in-out focus:outline-none focus:ring-4";
 
-  // Size classes
   const sizeClasses = {
     sm: "px-3 py-2 text-xs",
     md: "px-5 py-2.5 text-sm",
@@ -22,7 +20,6 @@ const Button = ({
     xl: "px-6 py-3.5 text-base",
   };
 
-  // Color variants (Flowbite style with hover!)
   const variantClasses = {
     primary:
       "text-white bg-blue-700 hover:bg-blue-800 focus:ring-blue-300 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800",

@@ -9,10 +9,10 @@ export default function Register({ userType = "user" }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [toast, setToast] = useState(null); // { type: "success" | "error", message: "" }
+  const [toast, setToast] = useState(null);
   const navigate = useNavigate();
 
-  const config = {
+  const config = {// template
     user: { title: "Create Your Account", endpoint: "/register", bgColor: "bg-yellow-100", loginPath: "/login" },
     restaurant: { title: "Register Your Restaurant", endpoint: "/restaurant_register", bgColor: "bg-blue-100", loginPath: "/restaurant_login" },
     admin: { title: "Admin Registration", endpoint: "/admin_register", bgColor: "bg-purple-100", loginPath: "/admin_login" },
@@ -22,7 +22,7 @@ export default function Register({ userType = "user" }) {
 
   const showToast = (type, message) => {
     setToast({ type, message });
-    setTimeout(() => setToast(null), 4000); // auto-hide after 4s
+    setTimeout(() => setToast(null), 4000);
   };
 
   const handleSubmit = async (e) => {
@@ -35,7 +35,7 @@ export default function Register({ userType = "user" }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, { //generic endpoint
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, password }),

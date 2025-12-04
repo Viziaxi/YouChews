@@ -1,9 +1,9 @@
-async function geocodeAddress(address) {
+async function geocodeAddress(address) {//geoencoding address using nominatim for user address input
     const searchQuery = encodeURIComponent(address + ", United States");
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${searchQuery}&countrycodes=us&limit=1`;
     const response = await fetch(url, {
         headers: {
-            'User-Agent': 'MyDistanceApp/1.0' // Required by Nominatim policy
+            'User-Agent': 'MyDistanceApp/1.0'
         }
     });
 
@@ -20,7 +20,7 @@ async function geocodeAddress(address) {
         throw new Error("Address not found. Try being more specific.");
     }
 }
-
+// check missing of the user input
 async function check_integrity(data , token, check_all) {
     const check_authorization = await check_all('restaurant', token);
     if (check_authorization.status !== 200) {
@@ -49,6 +49,7 @@ async function check_integrity(data , token, check_all) {
     return { status: 200, message: 'Integrity check passed.' };
 }
 
+// function for administrator to approve/disapprove restaurant uploads
 export async function manageQueue({ approved_list = [], denied_list = [] }, token, pool, check_all) {
     const check_authorization = await check_all('admin', token);
     if (check_authorization.status !== 200) {
@@ -67,28 +68,25 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
             const restaurantInfo = row.restaurant_info;
             const restaurantName = restaurantInfo?.name || `restaurant_${itemId}`;
 
-            // Check if restaurant with this name already exists
             const checkExisting = await pool.query('SELECT id FROM restaurants WHERE name = $1', [restaurantName]);
             if (checkExisting.rows.length > 0) {
-                console.warn(`Restaurant with name "${restaurantName}" already exists, skipping`);
                 await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
                 continue;
             }
 
-            // Generate a default password using the restaurant ID
             const defaultPassword = `temp_${itemId}_${Date.now()}`;
 
             await pool.query(
                 'INSERT INTO restaurants (name, password, restaurant_info) VALUES ($1, $2, $3)',
                 [restaurantName, defaultPassword, restaurantInfo]
             );
-            await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);
+            await pool.query('DELETE FROM queue WHERE id = $1', [itemId]);// delete from the queue
         } catch (error) {
             console.error(`DB error for ID ${itemId}:`, error);
             return { status: 500, error: `Failed to process ID: ${itemId}: ${error.message}` };
         }
     }
-
+    // handle denied list
     for (const { id: itemId } of denied_list) {
         const selectDelete = await pool.query('SELECT restaurant_info FROM queue WHERE id = $1', [itemId]);
         if (selectDelete.rows.length === 0) {
@@ -106,45 +104,6 @@ export async function manageQueue({ approved_list = [], denied_list = [] }, toke
         status: 200,
         message: `Successfully processed ${approved_list.length + denied_list.length} restaurants.`
     };
-}
-
-export async function uploadRestaurant(data, token, pool, check_all) {
-  try {
-    const check_res = await check_integrity(data, token, check_all);
-    if (check_res.status !== 200) {
-      return check_res;
-    }
-
-    const geo = await geocodeAddress(data.address);
-    data.lat = geo.lat;
-    data.lon = geo.lng;
-    data.formatted_address = geo.formattedAddress;
-
-    // Normalize field names to align with restaurants.restaurant_info structure
-    // - Store service type under "attributes"
-    const normalized = {
-      id: data.id,
-      name: data.name,
-      address: data.address,
-
-      formatted_address: data.formatted_address,
-      attributes: { service_type: data.service_type },
-      menu: data.menu,
-      flavors: data.flavors,
-      lat: data.lat,
-      lon: data.lon,
-    };
-
-    await pool.query(
-      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
-      [JSON.stringify(normalized), data.id]
-    );
-
-    return { status: 200, message: 'Successfully inserted to queue' };
-  } catch (error) {
-    console.error('uploadRestaurant error:', error);
-    return { status: 500, error: error.message };
-  }
 }
 
 export async function view_queue(token, pool, check_all) {
@@ -168,6 +127,44 @@ export async function view_queue(token, pool, check_all) {
     };
 }
 
+// upload restaurant information
+export async function uploadRestaurant(data, token, pool, check_all) {
+  try {
+    const check_res = await check_integrity(data, token, check_all);
+    if (check_res.status !== 200) {
+      return check_res;
+    }
+
+    const geo = await geocodeAddress(data.address);
+    data.lat = geo.lat;
+    data.lon = geo.lng;
+    data.formatted_address = geo.formattedAddress;
+
+    const normalized = {
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      formatted_address: data.formatted_address,
+      attributes: { service_type: data.service_type },
+      menu: data.menu,
+      flavors: data.flavors,
+      lat: data.lat,
+      lon: data.lon,
+    };
+
+    await pool.query(
+      'INSERT INTO queue (restaurant_info, id) VALUES ($1::jsonb, $2)',
+      [JSON.stringify(normalized), data.id]
+    );
+
+    return { status: 200, message: 'Successfully inserted to queue' };
+  } catch (error) {
+    console.error('uploadRestaurant error:', error);
+    return { status: 500, error: error.message };
+  }
+}
+
+// find restaurant by its id number
 export async function find_restaurant(data ,token,pool, check_all) {
     const check_authorization = await check_all('restaurant', token);
     if (check_authorization.status !== 200) {

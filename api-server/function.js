@@ -156,7 +156,7 @@ export async function adminLogin({ name, password }, pool) {
         }
 
         const admin = admins.rows[0];
-        const check_password = (password === admin.password); // Not secure leave here for now
+        const check_password = (password === admin.password);
         if (!check_password) {
             return { status: 401, error: 'Username or Passwords do not match' };
         }
@@ -179,42 +179,6 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
-export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
-    if (!userLat || !userLon) {
-        throw new Error("Latitude and longitude are required");
-    }
-
-    const query = `
-        SELECT id
-        FROM (
-            SELECT id,
-                   (6371 * acos(
-                           cos(radians($1)) *
-                           cos(radians((restaurant_info ->>'lat'):: float)) *
-                           cos(radians((restaurant_info ->>'lon'):: float) - radians($2)) +
-                           sin(radians($1)) *
-                           sin(radians((restaurant_info ->>'lat'):: float))
-                           )) AS distance_km
-            FROM restaurants
-            WHERE restaurant_info ? 'lat'
-              AND restaurant_info ? 'lon'
-              AND (restaurant_info->>'lat')::float IS NOT NULL
-              AND (restaurant_info->>'lon')::float IS NOT NULL
-        ) AS distances
-        WHERE distance_km <= $3
-        ORDER BY distance_km ASC
-        LIMIT $4;
-    `;
-
-    try {
-        const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
-        return rows.map(row => row.id); // ← only IDs
-    } catch (error) {
-        console.error("Failed to get nearby restaurant IDs:", error);
-        throw error;
-    }
-}
-
 export async function getRecommendations(token, pool, body, check_all, numRecommendations = 10) {
     const auth = await check_all('user', token);
     if (auth.status !== 200) {
@@ -229,8 +193,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
     const radiusKm = 10;
 
-    try {
-        // THIS IS THE ONLY QUERY THAT WORKS WITH YOUR REAL SCHEMA
+    try {// query and calculate and get restaurant within certain radius
         const nearbyQuery = `
             SELECT 
                 id,
@@ -262,7 +225,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
         }
 
         const candidateIds = rows.map(r => r.id);
-
+        // invoke python recommender
         const pythonProcess = spawn('python', [
             '../recommender-system/src/main.py',
             JSON.stringify(candidateIds),
@@ -313,7 +276,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
                 rank: i + 1
             };
         });
-
+        //return recommended restaurant
         return {
             status: 200,
             data: formatted,
@@ -331,7 +294,6 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
     }
 }
 
-
 export async function logPreference(body, token, pool, check_all) {
     const payload = body?.res;
 
@@ -348,7 +310,7 @@ export async function logPreference(body, token, pool, check_all) {
     }
 
     if (auth.user.id !== userId) {
-        return { status: 403, error: 'You can only update your own preferences' };
+        return { status: 403, error: 'Not your own preferences' };
     }
 
     try {
@@ -369,9 +331,8 @@ export async function logPreference(body, token, pool, check_all) {
             if (!item_id) continue;
 
             const existing = currentPrefs.find(p => p.item_id === item_id);
-
+            //calculating user preference, by add curr + new //2 max 10 or -10
             if (existing) {
-                // Update existing
                 if (like_level !== undefined && like_level !== null) {
                     existing.like_level = Math.max(1, Math.min(10,
                         (existing.like_level + like_level) / 2
@@ -382,7 +343,7 @@ export async function logPreference(body, token, pool, check_all) {
                     ));
                 }
             } else {
-                // Add new
+
                 currentPrefs.push({
                     item_id,
                     like_level: like_level ? Math.max(1, Math.min(10, (like_level + 5) / 2)) : 6

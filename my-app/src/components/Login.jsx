@@ -8,9 +8,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export default function Login({ userType = "user" }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [toast, setToast] = useState(null); // { type: "success" | "error", message: "" }
+  const [toast, setToast] = useState(null);
   const navigate = useNavigate();
-
+  // template
   const config = {
     user: {
       title: "Welcome Back",
@@ -56,7 +56,7 @@ export default function Login({ userType = "user" }) {
 
       if (res.ok || res.status === 200) {
         showToast("success", "Login successful! Welcome back!");
-        localStorage.setItem("token", data.token);
+        localStorage.setItem("token", data.token);// save token and user type in localstorage
         localStorage.setItem("user", JSON.stringify({ ...data.user, type: userType }));
         setTimeout(() => navigate(successRedirect), 1500);
       } else {
@@ -69,7 +69,6 @@ export default function Login({ userType = "user" }) {
 
   return (
     <div className={`min-h-screen flex items-center justify-center ${bgColor} p-4 relative`}>
-      {/* Beautiful Toast Popup — same as Register! */}
       {toast && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 animate-slide-down">
           <div
@@ -174,7 +173,6 @@ export default function Login({ userType = "user" }) {
         </div>
       </form>
 
-      {/* Same animation as Register */}
       <style jsx>{`
         @keyframes slideDown {
           from { transform: translateY(-100px); opacity: 0; }
