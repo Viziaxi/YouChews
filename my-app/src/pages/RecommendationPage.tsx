@@ -101,8 +101,6 @@ const RecommendationPage: React.FC = () => {
 
       fetchRecommendations(token, mockLat, mockLong, ideee);
 
-      // --- CHANGE END ---
-
       /*navigator.geolocation.getCurrentPosition(
         (position) => {
           fetchRecommendations(
@@ -197,6 +195,7 @@ const RecommendationPage: React.FC = () => {
       setCurrentRecId(recommendations[nextIndex].id);
     }
 
+    // Update the user's preference for this recommendation
     try {
       await axios.post("https://youchews.onrender.com/logPreference", payload, {
         headers: { Authorization: `Bearer ${authToken}` },
