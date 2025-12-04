@@ -179,8 +179,6 @@ export async function adminLogin({ name, password }, pool) {
     }
 }
 
-// function.js (refactored parts only)
-
 export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, radiusKm = 10, limit = 500) {
     if (!userLat || !userLon) {
         throw new Error("Latitude and longitude are required");
@@ -188,35 +186,29 @@ export async function getRestaurantIdsWithinDistance(pool, userLat, userLon, rad
 
     const query = `
         SELECT id
-        FROM restaurants
-        WHERE restaurant_info ? 'lat'
-          AND restaurant_info ? 'lon'
-          AND (restaurant_info->>'lat')::float IS NOT NULL
-          AND (restaurant_info->>'lon')::float IS NOT NULL
-          AND (
-            6371 * acos(
-                cos(radians($1)) *
-                cos(radians((restaurant_info->>'lat')::float)) *
-                cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
-                sin(radians($1)) *
-                sin(radians((restaurant_info->>'lat')::float))
-            )
-          ) <= $3
-        ORDER BY (
-            6371 * acos(
-                cos(radians($1)) *
-                cos(radians((restaurant_info->>'lat')::float)) *
-                cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
-                sin(radians($1)) *
-                sin(radians((restaurant_info->>'lat')::float))
-            )
-        ) ASC
+        FROM (
+            SELECT id,
+                   (6371 * acos(
+                           cos(radians($1)) *
+                           cos(radians((restaurant_info ->>'lat'):: float)) *
+                           cos(radians((restaurant_info ->>'lon'):: float) - radians($2)) +
+                           sin(radians($1)) *
+                           sin(radians((restaurant_info ->>'lat'):: float))
+                           )) AS distance_km
+            FROM restaurants
+            WHERE restaurant_info ? 'lat'
+              AND restaurant_info ? 'lon'
+              AND (restaurant_info->>'lat')::float IS NOT NULL
+              AND (restaurant_info->>'lon')::float IS NOT NULL
+        ) AS distances
+        WHERE distance_km <= $3
+        ORDER BY distance_km ASC
         LIMIT $4;
     `;
 
     try {
-        const { rows } = await pool.query(query, [userLat, userLon, radiusKm, limit]);
-        return rows.map(row => row.id);
+        const {rows} = await pool.query(query, [userLat, userLon, radiusKm, limit]);
+        return rows.map(row => row.id); // ← only IDs
     } catch (error) {
         console.error("Failed to get nearby restaurant IDs:", error);
         throw error;
@@ -238,19 +230,27 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
     const radiusKm = 10;
 
     try {
-        // PERFECT QUERY FOR YOUR ACTUAL SCHEMA
+        // THIS IS THE ONLY QUERY THAT WORKS WITH YOUR REAL SCHEMA
         const nearbyQuery = `
             SELECT 
-                r.id,
-                r.name,
-                r.restaurant_info,
-                r.lat,
-                r.lon,
-                (6371 * acos(cos(radians($1)) * cos(radians(r.lat)) * cos(radians(r.lon) - radians($2)) +
-                       sin(radians($1)) * sin(radians(r.lat)))) AS distance_km
-            FROM restaurants r
-            WHERE (6371 * acos(cos(radians($1)) * cos(radians(r.lat)) * cos(radians(r.lon) - radians($2)) +
-                   sin(radians($1)) * sin(radians(r.lat)))) <= $3
+                id,
+                name,
+                restaurant_info,
+                (6371 * acos(
+                    cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) * 
+                    cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
+                    sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
+                )) AS distance_km
+            FROM restaurants
+            WHERE restaurant_info ? 'lat' 
+              AND restaurant_info ? 'lon'
+              AND (restaurant_info->>'lat')::float IS NOT NULL
+              AND (restaurant_info->>'lon')::float IS NOT NULL
+              AND (6371 * acos(
+                  cos(radians($1)) * cos(radians((restaurant_info->>'lat')::float)) * 
+                  cos(radians((restaurant_info->>'lon')::float) - radians($2)) +
+                  sin(radians($1)) * sin(radians((restaurant_info->>'lat')::float))
+              )) <= $3
             ORDER BY distance_km
             LIMIT 50
         `;
@@ -263,7 +263,7 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
         const candidateIds = rows.map(r => r.id);
 
-        // Python recommender (already fixed – just works)
+        // Python recommender
         const pythonProcess = spawn('python', [
             '../recommender-system/src/main.py',
             JSON.stringify(candidateIds),
@@ -272,19 +272,13 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
         ]);
 
         let stdoutData = '';
-        let stderrData = '';
+        pythonProcess.stdout.on('data', d => stdoutData += d.toString());
+        pythonProcess.stderr.on('data', d => console.error('PYTHON:', d.toString()));
 
-        pythonProcess.stdout.on('data', (data) => stdoutData += data.toString());
-        pythonProcess.stderr.on('data', (data) => stderrData += data.toString());
-
-        const pythonExit = new Promise((resolve, reject) => {
-            pythonProcess.on('close', (code) => {
-                if (code !== 0) {
-                    return reject(new Error(stderrData || 'Python crashed'));
-                }
-                const lines = stdoutData.trim().split('\n');
-                const lastLine = lines[lines.length - 1];
-                const match = lastLine.match(/\[.*\]/);
+        const recommendedIds = await new Promise((resolve, reject) => {
+            pythonProcess.on('close', code => {
+                if (code !== 0) return reject(new Error('Python failed'));
+                const match = stdoutData.trim().match(/\[.*\]/);
                 if (!match) return reject(new Error('No JSON from Python'));
                 try {
                     resolve(JSON.parse(match[0]));
@@ -294,33 +288,30 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
             });
         });
 
-        const recommendedIds = await pythonExit;
-
-        // FINAL FORMATTING – reads from restaurant_info JSONB
-        const recommendedRows = rows
-            .filter(row => recommendedIds.includes(row.id))
+        // Format final results – everything from restaurant_info
+        const ordered = rows
+            .filter(r => recommendedIds.includes(r.id))
             .sort((a, b) => recommendedIds.indexOf(a.id) - recommendedIds.indexOf(b.id));
 
-        const formatted = recommendedRows.map((row, index) => {
+        const formatted = ordered.map((row, i) => {
             const info = row.restaurant_info || {};
-            const distanceKm = parseFloat(row.distance_km) || 0;
-            const distanceMiles = distanceKm * 0.621371;
+            const distKm = parseFloat(row.distance_km) || 0;
 
             return {
                 id: row.id.toString(),
-                name: row.name || 'Unknown Restaurant',
+                name: row.name || 'Unknown',
                 address: info.address || 'No address',
                 price_level: info.price || '$',
-                categories: Array.isArray(info.cuisine) ? info.cuisine : (info.cuisine ? info.cuisine.split(',') : []),
+                categories: info.cuisine ? (Array.isArray(info.cuisine) ? info.cuisine : info.cuisine.split(',').map(s => s.trim())) : [],
                 service_style: info.service_style || 'Casual',
                 flavors: Array.isArray(info.flavors) ? info.flavors : [],
                 menu: Array.isArray(info.menu) ? info.menu : [],
-                lat: parseFloat(row.lat) || 0,
-                lon: parseFloat(row.lon) || 0,
-                distance_km: Number(distanceKm.toFixed(2)),
-                distance_miles: Number(distanceMiles.toFixed(2)),
-                recommendation_score: Number((9.9 - index * 0.15).toFixed(2)),
-                rank: index + 1
+                lat: parseFloat(info.lat) || 0,
+                lon: parseFloat(info.lon) || 0,
+                distance_km: Number(distKm.toFixed(2)),
+                distance_miles: Number((distKm * 0.621371).toFixed(2)),
+                recommendation_score: Number((9.9 - i * 0.2).toFixed(2)),
+                rank: i + 1
             };
         });
 
@@ -337,9 +328,10 @@ export async function getRecommendations(token, pool, body, check_all, numRecomm
 
     } catch (error) {
         console.error('getRecommendations error:', error);
-        return { status: 500, error: error.message || 'Internal error' };
+        return { status: 500, error: error.message || 'Server error' };
     }
 }
+
 
 export async function logPreference(data,token,pool,check_all) {
     if (!data || !data.id) {
