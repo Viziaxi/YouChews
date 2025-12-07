@@ -74,11 +74,11 @@ const RecommendationPage: React.FC = () => {
         return; // Redirect to login logic would go here
       }
 
-      /*if (!navigator.geolocation) {
+      if (!navigator.geolocation) {
         setError("Geolocation is not supported by your browser.");
         setLoading(false);
         return;
-      }*/
+      }
 
       setAuthToken(token);
 
@@ -93,20 +93,13 @@ const RecommendationPage: React.FC = () => {
       const ideee = parseInt(user.id, 10);
       setUserId(ideee);
 
-      // Santa Clara's Coordinates
-      const mockLat = 37.354107;
-      const mockLong = -121.955238;
-
-      console.log("Using Mock Location:", mockLat, mockLong);
-
-      fetchRecommendations(token, mockLat, mockLong, ideee);
-
-      /*navigator.geolocation.getCurrentPosition(
+      navigator.geolocation.getCurrentPosition(
         (position) => {
           fetchRecommendations(
             token,
             position.coords.latitude,
-            position.coords.longitude
+            position.coords.longitude,
+            ideee
           );
         },
         (geoError) => {
@@ -115,7 +108,7 @@ const RecommendationPage: React.FC = () => {
           );
           setLoading(false);
         }
-      );*/
+      );
     };
 
     initialize();
